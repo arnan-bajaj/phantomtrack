@@ -12,7 +12,7 @@ You need Java 17 or newer. The JDK that comes with WPILib works.
 
 ```bash
 ./gradlew run                          # interactive sim window
-./gradlew run --args="--headless"      # 60 s run: no defense vs. Shadow, prints metrics, saves snapshots/shadow-midrun.png
+./gradlew run --args="--headless"      # 60 s run: no defense vs. every mode, prints metrics, saves snapshots/*.png
 ./gradlew test                         # unit tests
 ```
 
@@ -31,22 +31,34 @@ terminal.
 | Q / E | rotate |
 | hold SPACE | engage the defense assist |
 | F | cycle focus opponent: auto (nearest) → #0 → #1 → #2 → auto |
-| M | next defense mode (only Shadow exists so far) |
+| M | next defense mode |
+| 1 / 2 / 3 / 4 | Shadow / Interpose / Zone / Line mirror |
 | P | pause |
 | R | reset |
 
 Pressing a drive key while holding SPACE is a **driver override**: you get full control back. The
 HUD shows the assist state (OFF / ENGAGED / DRIVER_OVERRIDE / NO_TARGET).
 
+## Defense modes
+
+| # | Mode | What it does | Uses focus (F)? |
+| --- | --- | --- | --- |
+| 1 | Shadow | Stays a fixed distance in front of the opponent, between them and the goal (man-to-man). | yes |
+| 2 | Interpose | Stands halfway along the opponent's path to the goal, taking the lane early instead of retreating. | yes |
+| 3 | Zone | Waits near the goal (green circle). Meets whoever enters the zone, using intercept math, then returns. | no, picks its own threat |
+| 4 | Line mirror | Stays on a fixed line in front of the goal (green line) and slides to match the opponent. | yes |
+
+The formula for each mode is in its class comment in `src/main/java/phantom/core/modes/`.
+
 ## How it's organized
 
 ```
 src/main/java/phantom/
   core/            Robot-ready code. ZERO dependencies (no WPILib, no AWT), so it drops into robot code later.
-    geometry/      Vec2, Pose, Angles
+    geometry/      Vec2, Pose, Angles, Intercept (earliest-catch-time math)
     field/         FieldConfig: field size, goal, pickups (placeholder until 2027 kickoff)
     tracking/      TrackedRobot, OpponentTracker  <- the ONLY way defense code sees opponents
-    modes/         DefenseMode interface, ShadowMode
+    modes/         DefenseMode interface + Shadow, Interpose, Zone, LineMirror modes
     control/       HolonomicController (target -> velocity), DriverBlend (driver override)
     manager/       DefenseAssist: tracker -> mode -> controller -> blend, once per 20 ms loop
   sim/             Simulator only. Never used on the robot.
@@ -66,7 +78,7 @@ over NetworkTables, then vision. Nothing in `core/modes` or `core/control` chang
 - [x] Phase 1: sim world, Cycler opponents, Shadow mode, controller, driver override, metrics
 - [ ] Phase 2: noisy/laggy tracker + Kalman filter for opponent velocity
 - [ ] Evader opponent (dodges the defender), so modes are tested against someone fighting back
-- [ ] Phase 4: Interpose, Zone (intercept math), Line mirror modes
+- [x] Phase 4: Interpose, Zone (intercept math), Line mirror modes
 - [ ] Phase 5: target selection with hysteresis, confidence fallback, pin timer (RulesGuard)
 - [ ] Phase 6: batch runs with CSV metrics
 - [ ] Phase 7: real robot (AprilTag pose) with simulated ghost opponents
@@ -74,17 +86,20 @@ over NetworkTables, then vision. Nothing in `core/modes` or `core/control` chang
 
 ## Current findings
 
-Headless 60 s run, three Cycler opponents:
+Headless 60 s run, three Cycler opponents (they drive straight to the goal and push through):
 
-| | No defense | Shadow |
-| --- | --- | --- |
-| Cycles per opponent | 9 / 9 / 9 | 9 / 9 / 9 |
-| Goal-side of guarded opponent | – | 90% |
-| Mean tracking error | – | 0.91 m |
-| Contact time | – | 26.6 s |
+| | No defense | Shadow | Interpose | Zone | Line mirror |
+| --- | --- | --- | --- | --- | --- |
+| Total opponent cycles | 27 | 27 | 27 | 25 | 22 |
+| Goal-side when guarding | – | 90% | 100% | 91% | 46% |
+| Mean tracking error | – | 0.91 m | 0.17 m | 0.81 m | 0.96 m |
+| Contact time | 1.3 s | 26.6 s | 7.7 s | 13.0 s | 36.2 s |
 
-Shadow holds the goal-side position as designed, but it **does not slow down a bot that bulldozes
-straight to the goal**. The current sim lets the opponent shove us out of the way on contact.
-Getting real cycle-time impact needs (a) an Evader opponent that has to path around us, (b) modes
-that take space instead of retreating (Interpose), and (c) a contact model where a defender holding
-position actually resists being pushed.
+What this says, honestly:
+
+- **Interpose positions best** (always goal-side, 0.17 m from its target) but costs Cyclers nothing,
+  because they shove through anyone in the way.
+- **Line mirror cuts the most cycles (27 to 22), but only by making contact for 36 s of 60.** In a
+  real match that is pinning-foul risk, and the sim's pushing model is too simple to trust it.
+- These numbers will change a lot once (a) opponents dodge (Evader), and (b) the contact model lets
+  a defender holding position resist being pushed. Don't pick a "best mode" from this table yet.

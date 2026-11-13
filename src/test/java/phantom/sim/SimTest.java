@@ -89,6 +89,34 @@ class SimTest {
   }
 
   @Test
+  void everyModeRunsWithoutNaN() {
+    int modes = SimSession.standard().assist().modes().size();
+    assertEquals(4, modes);
+    for (int m = 0; m < modes; m++) {
+      SimSession s = SimSession.standard();
+      s.assist().setModeIndex(m);
+      for (int i = 0; i < 1500; i++) { // 30 s
+        s.step(ChassisCommand.STOP, true);
+        assertTrue(s.world().self().position().isFinite(), s.assist().activeMode().name());
+      }
+    }
+  }
+
+  @Test
+  void modeSwitchingWrapsAround() {
+    SimSession s = SimSession.standard();
+    assertEquals("Shadow", s.assist().activeMode().name());
+    s.assist().nextMode();
+    assertEquals("Interpose", s.assist().activeMode().name());
+    s.assist().setModeIndex(3);
+    assertEquals("Line mirror", s.assist().activeMode().name());
+    s.assist().nextMode();
+    assertEquals("Shadow", s.assist().activeMode().name());
+    s.assist().setModeIndex(99); // ignored
+    assertEquals("Shadow", s.assist().activeMode().name());
+  }
+
+  @Test
   void driverOverrideTakesControl() {
     SimSession s = SimSession.standard();
     s.step(new ChassisCommand(new Vec2(4.5, 0), 0), true);

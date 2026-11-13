@@ -98,6 +98,17 @@ public final class DefenseAssist {
     modeIndex = (modeIndex + 1) % modes.size();
   }
 
+  /** Select a mode by its position in the list (0-based). Out-of-range indexes are ignored. */
+  public void setModeIndex(int index) {
+    if (index >= 0 && index < modes.size()) {
+      modeIndex = index;
+    }
+  }
+
+  public int modeIndex() {
+    return modeIndex;
+  }
+
   public List<DefenseMode> modes() {
     return modes;
   }
