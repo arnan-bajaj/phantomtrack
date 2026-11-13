@@ -37,9 +37,10 @@ code. Keep changes small, tested and explained.
 ## Roadmap status
 
 See README.md. Done: Phase 1 (sim), Phase 4 (four modes: Shadow, Interpose, Zone, Line mirror),
-Evader opponent and pushing-match contact model, hold ground + RulesGuard pin timer. Key finding:
-holding ground on contact is what slows opponents; the pin guard keeps it legal. Next: Phase 2
-(noisy tracker + Kalman filter), target selection, batch CSV.
+Evader opponent and pushing-match contact model, hold ground + RulesGuard pin timer, Phase 2
+(simulated camera + Kalman filter, search behavior, stall detection). Key findings: holding ground
+is what slows opponents; a realistic camera halves the effect; the pin guard needs contact sensing
+beyond vision. Next: target selection with hysteresis, batch CSV.
 
 ## Workflow
 

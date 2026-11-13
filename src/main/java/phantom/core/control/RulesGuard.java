@@ -19,6 +19,9 @@ import phantom.core.tracking.TrackedRobot;
  * <pre>
  *   start backing off from opp i when contactSeconds(i) >= limit - safetyMargin
  *   (contact time is counted conservatively: any touching counts, even if they push us)
+ *   contact = estimated gap <= 0.05 m, OR we are blocked (see below) and this is the nearest
+ *   opponent within 2 * halfSize + BLOCKED_SEARCH_GAP. Vision estimates can be off by 0.4 m, so
+ *   the robot's own "I'm pushing and not moving" signal catches contact that cameras miss.
  *
  *   per opponent i being backed off from, step ASIDE so a pushing opponent can pass:
  *     if |v_i| > 0.3:  d_i = perp(unit(v_i)), sign chosen so d_i . (p_self - p_i) >= 0
@@ -28,6 +31,10 @@ import phantom.core.tracking.TrackedRobot;
  *
  *   stop backing off from i when its pin episode ends (gap >= resetSeparation)
  *   or MAX_BACKOFF_SECONDS pass (e.g. a wall stops us)
+ *
+ *   blind fallback: if we have been blocked continuously for (limit - safetyMargin) against
+ *   something we can't identify, reverse for BLIND_BACKOFF_SECONDS:
+ *     p* = p_self - STEP * unit(v_cmd_when_blocked),  v_ff = -BACKOFF_SPEED * unit(...)
  * </pre>
  *
  * Stateful on purpose (it measures time), so it lives here and not in a DefenseMode.
@@ -42,6 +49,11 @@ public final class RulesGuard {
   private final double safetyMargin;
   private final Map<Integer, Double> backoffStarts = new HashMap<>();
   private int backoffsTriggered = 0;
+  private double blockedSince = Double.NaN;
+  private Vec2 blockedDirection = Vec2.ZERO;
+  private double blindUntil = Double.NEGATIVE_INFINITY;
+
+  public static final double BLIND_BACKOFF_SECONDS = 1.0;
 
   /**
    * @param rules pin limits from the game manual
@@ -58,16 +70,75 @@ public final class RulesGuard {
     return new RulesGuard(PinRules.placeholder(), field, 0.5);
   }
 
+  /** Search radius (bumper gap, m) for the opponent blocking us when we detect a stall. */
+  public static final double BLOCKED_SEARCH_GAP = 0.6;
+
   /** Update timers and return the (possibly overridden) target. Call every loop. */
   public Optional<DefenseTarget> apply(
       double nowSec, Pose self, List<TrackedRobot> opponents, Optional<DefenseTarget> target) {
+    return apply(nowSec, self, opponents, target, false);
+  }
+
+  /**
+   * @param commanded our last commanded field velocity (m/s)
+   * @param actual our measured field velocity (m/s)
+   */
+  public Optional<DefenseTarget> apply(
+      double nowSec,
+      Pose self,
+      List<TrackedRobot> opponents,
+      Optional<DefenseTarget> target,
+      Vec2 commanded,
+      Vec2 actual) {
+    boolean blocked = isBlocked(commanded, actual);
+    if (!blocked) {
+      blockedSince = Double.NaN;
+    } else if (Double.isNaN(blockedSince)) {
+      blockedSince = nowSec;
+      blockedDirection = commanded.normalized();
+    }
+    Optional<DefenseTarget> out = apply(nowSec, self, opponents, target, blocked);
+    if (backingOff()) {
+      blockedSince = Double.NaN; // the identified-opponent back-off is already handling it
+      return out;
+    }
+    double trigger = pinTimer.rules().limitSeconds() - safetyMargin;
+    if (!Double.isNaN(blockedSince) && nowSec - blockedSince >= trigger) {
+      blindUntil = nowSec + BLIND_BACKOFF_SECONDS;
+      blockedSince = Double.NaN;
+      backoffsTriggered++;
+    }
+    if (nowSec < blindUntil && !blockedDirection.equals(Vec2.ZERO)) {
+      Vec2 back = blockedDirection.times(-1.0);
+      Vec2 retreat = field.clampInside(self.position().plus(back.times(STEP)));
+      return Optional.of(new DefenseTarget(retreat, self.heading(), back.times(BACKOFF_SPEED), -1));
+    }
+    return out;
+  }
+
+  /** True while the blind (unidentified blocker) back-off is running. */
+  public boolean blindBackingOff(double nowSec) {
+    return nowSec < blindUntil;
+  }
+
+  /**
+   * @param blocked true if our own sensors say we are pushing and not moving (see {@link
+   *     #isBlocked})
+   */
+  public Optional<DefenseTarget> apply(
+      double nowSec,
+      Pose self,
+      List<TrackedRobot> opponents,
+      Optional<DefenseTarget> target,
+      boolean blocked) {
     Map<Integer, Vec2> positions = new HashMap<>();
     Map<Integer, Vec2> velocities = new HashMap<>();
     for (TrackedRobot r : opponents) {
       positions.put(r.id(), r.positionAt(nowSec));
       velocities.put(r.id(), r.velocity());
     }
-    pinTimer.update(nowSec, self.position(), positions);
+    int blocker = blocked ? nearestWithin(self.position(), positions) : -1;
+    pinTimer.update(nowSec, self.position(), positions, id -> true, id -> id == blocker);
 
     // Finish back-offs whose episode ended, whose track was lost, or that timed out.
     backoffStarts
@@ -114,6 +185,36 @@ public final class RulesGuard {
     Vec2 retreat = field.clampInside(self.position().plus(dir.times(STEP)));
     double heading = positions.get(nearest).minus(self.position()).angle(); // keep facing them
     return Optional.of(new DefenseTarget(retreat, heading, dir.times(BACKOFF_SPEED), nearest));
+  }
+
+  private int nearestWithin(Vec2 self, Map<Integer, Vec2> positions) {
+    double limit = 2.0 * field.robotHalfSize() + BLOCKED_SEARCH_GAP;
+    int best = -1;
+    double bestDist = Double.POSITIVE_INFINITY;
+    for (Map.Entry<Integer, Vec2> e : positions.entrySet()) {
+      double d = e.getValue().distanceTo(self);
+      if (d <= limit && d < bestDist) {
+        best = e.getKey();
+        bestDist = d;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Stall detection from our own odometry: we asked to move at least 1 m/s, but our actual speed
+   * in that direction is under 30% of it.
+   *
+   * <pre>
+   *   blocked = |v_cmd| > 1.0  and  v_actual . unit(v_cmd) < 0.3 * |v_cmd|
+   * </pre>
+   */
+  public static boolean isBlocked(Vec2 commanded, Vec2 actual) {
+    double speed = commanded.norm();
+    if (speed <= 1.0) {
+      return false;
+    }
+    return actual.dot(commanded.normalized()) < 0.3 * speed;
   }
 
   /** Unit direction to back off from one opponent (see class comment). */

@@ -43,7 +43,12 @@ public final class SimMain {
   }
 
   /** One configuration to compare. modeIndex -1 = no defense (robot parked in a corner). */
-  record Setup(String label, int modeIndex, boolean hold, boolean guard) {}
+  record Setup(String label, int modeIndex, boolean hold, boolean guard, SimSession.Sensor sensor,
+      long seed) {
+    Setup(String label, int modeIndex, boolean hold, boolean guard) {
+      this(label, modeIndex, hold, guard, SimSession.Sensor.PERFECT, 1L);
+    }
+  }
 
   /** The standard list of setups compared in headless runs. */
   static List<Setup> standardSetups() {
@@ -67,7 +72,7 @@ public final class SimMain {
     SimSession s =
         setup.modeIndex() < 0
             ? new SimSession(Scenarios.three(field, kind, Scenarios.parkedOutOfTheWay(field)))
-            : SimSession.standard(kind);
+            : SimSession.standard(kind, setup.sensor(), setup.seed());
     if (setup.modeIndex() >= 0) {
       s.assist().setModeIndex(setup.modeIndex());
       s.assist().setHoldEnabled(setup.hold());
@@ -89,6 +94,48 @@ public final class SimMain {
     for (Scenarios.OpponentKind kind : Scenarios.OpponentKind.values()) {
       runComparison(kind, seconds);
       System.out.println();
+    }
+    runTrackingComparison(seconds);
+  }
+
+  /** Seeds averaged for each noisy-sensor row. */
+  static final int SEEDS = 5;
+
+  /** How much worse do the two best setups get with a realistic or bad camera? */
+  static void runTrackingComparison(double seconds) throws IOException {
+    System.out.printf("=== Tracking quality: %.0f s, guarding #%d, noisy rows averaged over %d seeds ===%n",
+        seconds, GUARDED_ID, SEEDS);
+    System.out.printf("%-10s %-22s %-10s %8s %6s %10s %9s%n",
+        "Opponents", "Setup", "Sensor", "Slowed", "Pins", "Est. err", "Coverage");
+    for (Scenarios.OpponentKind kind : Scenarios.OpponentKind.values()) {
+      double base = run(new Setup("none", -1, false, true), kind, seconds, null)
+          .world().opponents().get(GUARDED_ID).behavior().averageCycleSeconds();
+      int[] modes = {0, 3};
+      String[] names = {"Shadow + hold", "Line mirror + hold"};
+      for (int i = 0; i < modes.length; i++) {
+        for (SimSession.Sensor sensor : SimSession.Sensor.values()) {
+          int n = sensor == SimSession.Sensor.PERFECT ? 1 : SEEDS;
+          double cycle = 0, err = 0, cov = 0;
+          int pins = 0;
+          for (long seed = 1; seed <= n; seed++) {
+            SimSession s = run(new Setup(names[i], modes[i], true, true, sensor, seed), kind, seconds, null);
+            cycle += s.world().opponents().get(GUARDED_ID).behavior().averageCycleSeconds();
+            pins += s.world().pinViolations();
+            if (sensor != SimSession.Sensor.PERFECT) {
+              err += s.metrics().meanEstimateError();
+              cov += s.metrics().trackCoverage();
+            }
+          }
+          cycle /= n;
+          String errText = sensor == SimSession.Sensor.PERFECT ? "0" : String.format("%.2f m", err / n);
+          String covText = sensor == SimSession.Sensor.PERFECT ? "100%" : String.format("%.0f%%", 100 * cov / n);
+          System.out.printf("%-10s %-22s %-10s %+7.0f%% %6s %10s %9s%n",
+              kind == Scenarios.OpponentKind.EVADER ? "Evader" : "Cycler", names[i], sensor.label(),
+              100 * (cycle - base) / base,
+              n == 1 ? String.valueOf(pins) : String.format("%.1f", (double) pins / n),
+              errText, covText);
+        }
+      }
     }
   }
 

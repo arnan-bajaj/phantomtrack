@@ -10,7 +10,8 @@ import phantom.core.geometry.Vec2;
  *
  * <pre>
  *   gap        = |p_opp - p_self| - 2 * robotHalfSize        (bumper-to-bumper, robots as circles)
- *   in contact = gap <= CONTACT_TOLERANCE  and  we are pressing into that opponent
+ *   in contact = (gap <= CONTACT_TOLERANCE  or  our own sensors say we're blocked by them)
+ *                and  we are pressing into that opponent
  *                (callers that can't tell, like RulesGuard, assume we always are: conservative)
  *   episode starts on first contact; contact time accumulates only while in contact;
  *   episode ends (timer cleared) once gap >= resetSeparation.
@@ -45,12 +46,28 @@ public final class PinTimer {
    *     (e.g. while we back away, or when they push us) does not add pin time
    */
   public void update(double nowSec, Vec2 self, Map<Integer, Vec2> opponents, IntPredicate pressing) {
+    update(nowSec, self, opponents, pressing, id -> false);
+  }
+
+  /**
+   * Full version.
+   *
+   * @param forcedContact true for opponents we know we are touching from our own sensors (e.g. we
+   *     are pushing and not moving), even if their estimated position says otherwise
+   */
+  public void update(
+      double nowSec,
+      Vec2 self,
+      Map<Integer, Vec2> opponents,
+      IntPredicate pressing,
+      IntPredicate forcedContact) {
     double dt = Double.isNaN(lastTime) ? 0.0 : Math.max(0.0, nowSec - lastTime);
     lastTime = nowSec;
     for (Map.Entry<Integer, Vec2> e : opponents.entrySet()) {
       int id = e.getKey();
       double gap = gap(self, e.getValue());
-      boolean inContact = gap <= CONTACT_TOLERANCE && pressing.test(id);
+      boolean inContact =
+          (gap <= CONTACT_TOLERANCE || forcedContact.test(id)) && pressing.test(id);
       boolean wasTouching = touching.getOrDefault(id, false);
       touching.put(id, inContact);
       if (inContact) {

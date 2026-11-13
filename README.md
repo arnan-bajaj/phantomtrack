@@ -32,6 +32,7 @@ terminal.
 | hold SPACE | engage the defense assist |
 | F | cycle focus opponent: auto (nearest) → #0 → #1 → #2 → auto |
 | O | switch opponent type (Cycler ↔ Evader) and restart |
+| N | switch sensor: Perfect → Realistic → Bad camera, and restart |
 | M | next defense mode |
 | H | toggle **hold ground** (stop retreating on contact, push back) |
 | 1 / 2 / 3 / 4 | Shadow / Interpose / Zone / Line mirror |
@@ -39,7 +40,8 @@ terminal.
 | R | reset |
 
 Pressing a drive key while holding SPACE is a **driver override**: you get full control back. The
-HUD shows the assist state (OFF / ENGAGED / DRIVER_OVERRIDE / NO_TARGET).
+HUD shows the assist state (OFF / ENGAGED / DRIVER_OVERRIDE / SEARCHING / BACKING_OFF). With a
+noisy sensor, dashed outlines show where the robot *thinks* opponents are.
 
 ## Defense modes
 
@@ -67,6 +69,7 @@ src/main/java/phantom/
     geometry/      Vec2, Pose, Angles, Intercept (earliest-catch-time math)
     field/         FieldConfig: field size, goal, pickups (placeholder until 2027 kickoff)
     tracking/      TrackedRobot, OpponentTracker  <- the ONLY way defense code sees opponents
+                   Measurement, MeasurementSource, AxisKalman, KalmanOpponentTracker (noisy sightings -> tracks)
     modes/         DefenseMode interface + Shadow, Interpose, Zone, LineMirror modes
     control/       HolonomicController (target -> velocity), DriverBlend (driver override), RulesGuard (pin limit)
     rules/         PinRules (game-manual numbers), PinTimer (contact time per opponent)
@@ -77,7 +80,8 @@ src/main/java/phantom/
     Avoidance      Evader's steering around robots in its path
     Contact        pushing-match model: whoever drives harder into the other wins
     SimWorld       ground truth + collisions
-    PerfectTracker OpponentTracker that reports exact truth (noisy version comes in Phase 2)
+    PerfectTracker OpponentTracker that reports exact truth
+    NoisySensor    simulated camera: FOV, range, noise, latency, dropouts (feeds KalmanOpponentTracker)
     ui/            Swing window + renderer
 ```
 
@@ -88,7 +92,7 @@ over NetworkTables, then vision. Nothing in `core/modes` or `core/control` chang
 ## Roadmap
 
 - [x] Phase 1: sim world, Cycler opponents, Shadow mode, controller, driver override, metrics
-- [ ] Phase 2: noisy/laggy tracker + Kalman filter for opponent velocity
+- [x] Phase 2: noisy/laggy camera + Kalman filter, search behavior, stall-based contact detection
 - [x] Evader opponent (dodges the defender) and a pushing-match contact model
 - [x] Phase 4: Interpose, Zone (intercept math), Line mirror modes
 - [x] Hold-ground behavior + pin timer (RulesGuard) with sideways back-off
@@ -104,29 +108,47 @@ Zone picks its own threat. "No defense" parks our robot in a corner. **Slowed** 
 guarded opponent's average cycle time went up. **Pins** are counted like a referee would: only
 contact time while we are driving into that opponent, one per episode that reaches 3 s.
 
+### With perfect tracking
+
 | Setup | vs Cyclers (push through) | vs Evaders (dodge) | Pins (C / E) |
 | --- | --- | --- | --- |
-| Shadow | +6% | +9% | 0 / 0 |
-| **Shadow + hold** | **+23%** | **+30%** | **0 / 0** |
-| Interpose | −1% | −3% | 0 / 0 |
-| Interpose + hold | +6% | +3% | 0 / 0 |
-| Zone | +3% | +0% | 0 / 0 |
+| Shadow | +2% | +7% | 0 / 0 |
+| **Shadow + hold** | **+24%** | **+23%** | **0 / 0** |
+| Interpose + hold | +5% | +6% | 0 / 0 |
 | Zone + hold | +4% | +1% | 0 / 0 |
-| Line mirror | +35% | +24% | 0 / 0 |
-| Line mirror + hold | +38% | +28% | 0 / 0 |
-| Shadow + hold, **no pin guard** | +28% | +126% | 9 / 3 |
-| Line mirror + hold, **no pin guard** | +50% | +27% | 17 / 0 |
+| Line mirror | +35% | +26% | 0 / 0 |
+| **Line mirror + hold** | **+36%** | **+28%** | **0 / 0** |
+| Shadow + hold, no pin guard | +28% | +126% | 9 / 3 |
+| Line mirror + hold, no pin guard | +50% | +27% | 17 / 0 |
+
+### With a simulated camera (averaged over 5 seeds)
+
+"Realistic" = two cameras (140°), 0.10 m noise, 80 ms latency, 15% dropped frames, 8 m range.
+"Bad" = one 70° camera, 0.25 m noise, 150 ms, 35% dropped, 6 m. These are guesses until the real
+pipeline is measured.
+
+| Opponents | Setup | Perfect | Realistic | Bad |
+| --- | --- | --- | --- | --- |
+| Cyclers | Shadow + hold | +24% | +14% | +10% |
+| Cyclers | Line mirror + hold | +36% | +29% | +12% |
+| Evaders | Shadow + hold | +23% | +12% | +10% |
+| Evaders | Line mirror + hold | +28% | +15% | +9% |
+
+Pins with a camera: 0 to 0.8 per 180 s. Position estimate error: about 0.4 m (Realistic), 0.9 m (Bad).
+Time each opponent is tracked: 50–73% (Realistic), 31–41% (Bad).
 
 What this says:
 
-- **Holding ground is what makes defense work.** Shadow goes from +6–9% to +23–30% just by not
-  retreating on contact, and stays legal.
-- **The pin guard costs a little effectiveness and removes every pin.** Without it, the numbers
-  look better (Shadow + hold jams an Evader for 166 of 180 s) but every one of those runs would
-  draw fouls.
-- **Line mirror and Shadow + hold are the two strongest legal setups.** Line mirror is better
-  against bulldozers, Shadow + hold against robots that dodge.
-- **Interpose and Zone barely matter** in this scenario. Both stand far from the opponent, so they
-  rarely get the contact that hold needs.
-- Limits: one defender, three opponents with fixed routes, no game pieces, idealized pushing. Treat
-  the ranking as a direction, not a guarantee.
+- **Holding ground is what makes defense work**, and the pin guard keeps it legal with perfect
+  tracking.
+- **A realistic camera costs about half the effect.** The robot only sees each opponent half the
+  time. Line mirror holds up best because it faces down-field and only needs one coordinate.
+- **Camera coverage matters more than camera accuracy.** Going from Realistic to Bad roughly
+  doubles the error, but the bigger loss comes from seeing opponents less often. Wider field of
+  view (more cameras) is the first thing to buy.
+- **The pin guard can't be camera-only.** With noisy tracking it misses some contact and about one
+  pin slips through every 4–5 minutes of defending. The robot's own sense of being blocked (pushing
+  but not moving) already catches most of it. On the real robot, add contact sensing (drive motor
+  current spikes) before trusting it in a match.
+- Limits: one defender, three opponents with fixed routes, no game pieces, idealized pushing,
+  opponent identity assumed known. Treat rankings as direction, not guarantees.
