@@ -1,0 +1,37 @@
+plugins {
+    id 'java'
+    id 'application'
+}
+
+group = 'phantom'
+version = '0.1.0'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // The main code has NO dependencies on purpose, so phantom.core can be
+    // dropped into a WPILib robot project later without conflicts.
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+// Java 17 to match the JDK that ships with WPILib.
+tasks.withType(JavaCompile).configureEach {
+    options.release = 17
+    options.encoding = 'UTF-8'
+}
+
+application {
+    mainClass = 'phantom.sim.SimMain'
+}
+
+test {
+    useJUnitPlatform()
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+    }
+}
