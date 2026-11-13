@@ -20,6 +20,8 @@ import phantom.sim.ui.SimWindow;
  *   ./gradlew run                                   interactive window
  *   ./gradlew run --args="--headless"               180 s comparison of every setup vs both opponent kinds
  *   ./gradlew run --args="--headless 600"           same, 600 s
+ *   ./gradlew run --args="--batch"                  every combination x seeds -> results/batch.csv
+ *   ./gradlew run --args="--batch 180 10"           same, 180 s per run, 10 seeds
  * </pre>
  */
 public final class SimMain {
@@ -29,6 +31,12 @@ public final class SimMain {
   private SimMain() {}
 
   public static void main(String[] args) throws IOException {
+    if (args.length > 0 && args[0].equals("--batch")) {
+      double seconds = args.length > 1 ? Double.parseDouble(args[1]) : 180.0;
+      int seeds = args.length > 2 ? Integer.parseInt(args[2]) : 3;
+      BatchRunner.run(seconds, seeds, new File("results", "batch.csv"));
+      return;
+    }
     boolean headless = args.length > 0 && args[0].equals("--headless");
     if (!headless && GraphicsEnvironment.isHeadless()) {
       System.out.println("No display found, running headless instead.");
@@ -42,11 +50,23 @@ public final class SimMain {
     runHeadless(seconds);
   }
 
-  /** One configuration to compare. modeIndex -1 = no defense (robot parked in a corner). */
+  /**
+   * One configuration to compare. modeIndex -1 = no defense (robot parked in a corner). focus -1 =
+   * auto (threatSelector picks threat-based selection, otherwise nearest).
+   */
   record Setup(String label, int modeIndex, boolean hold, boolean guard, SimSession.Sensor sensor,
-      long seed) {
+      long seed, int focus, boolean threatSelector) {
     Setup(String label, int modeIndex, boolean hold, boolean guard) {
       this(label, modeIndex, hold, guard, SimSession.Sensor.PERFECT, 1L);
+    }
+
+    Setup(String label, int modeIndex, boolean hold, boolean guard, SimSession.Sensor sensor,
+        long seed) {
+      this(label, modeIndex, hold, guard, sensor, seed, GUARDED_ID, true);
+    }
+
+    Setup withSensor(SimSession.Sensor s, long newSeed) {
+      return new Setup(label, modeIndex, hold, guard, s, newSeed, focus, threatSelector);
     }
   }
 
@@ -76,7 +96,8 @@ public final class SimMain {
     if (setup.modeIndex() >= 0) {
       s.assist().setModeIndex(setup.modeIndex());
       s.assist().setHoldEnabled(setup.hold());
-      s.assist().setFocusOpponentId(GUARDED_ID); // man-to-man modes lock onto one scorer
+      s.assist().setFocusOpponentId(setup.focus());
+      s.assist().setThreatSelectorEnabled(setup.threatSelector());
     }
     s.assist().setRulesGuardEnabled(setup.guard());
     boolean engaged = setup.modeIndex() >= 0;
@@ -96,6 +117,52 @@ public final class SimMain {
       System.out.println();
     }
     runTrackingComparison(seconds);
+    System.out.println();
+    runAutoFocusComparison(seconds);
+  }
+
+  /** Auto focus: nearest-opponent vs threat-based selection with hysteresis. Whole-team effect. */
+  static void runAutoFocusComparison(double seconds) throws IOException {
+    System.out.printf("=== Auto focus (no opponent chosen): %.0f s, effect on ALL opponents ===%n",
+        seconds);
+    System.out.printf("%-10s %-34s %12s %8s %10s %6s%n",
+        "Opponents", "Setup", "Total cyc", "Slowed", "Changes/min", "Pins");
+    for (Scenarios.OpponentKind kind : Scenarios.OpponentKind.values()) {
+      SimSession base = run(new Setup("No defense", -1, false, true), kind, seconds, null);
+      int baseTotal = totalCycles(base);
+      System.out.printf("%-10s %-34s %12d %8s %10s %6s%n", kindLabel(kind), "No defense", baseTotal,
+          "-", "-", "0");
+      for (Setup setup : autoFocusSetups()) {
+        SimSession s = run(setup, kind, seconds, null);
+        int total = totalCycles(s);
+        System.out.printf("%-10s %-34s %12d %+7.0f%% %10.1f %6d%n", kindLabel(kind), setup.label(),
+            total, 100.0 * (baseTotal - total) / total,
+            s.metrics().targetSwitches() / (seconds / 60.0), s.world().pinViolations());
+      }
+    }
+  }
+
+  static List<Setup> autoFocusSetups() {
+    List<Setup> list = new ArrayList<>();
+    list.add(new Setup("Shadow + hold, locked on #0", 0, true, true, SimSession.Sensor.PERFECT, 1, 0, true));
+    list.add(new Setup("Shadow + hold, auto=nearest", 0, true, true, SimSession.Sensor.PERFECT, 1, -1, false));
+    list.add(new Setup("Shadow + hold, auto=threat", 0, true, true, SimSession.Sensor.PERFECT, 1, -1, true));
+    list.add(new Setup("Line mirror + hold, locked on #0", 3, true, true, SimSession.Sensor.PERFECT, 1, 0, true));
+    list.add(new Setup("Line mirror + hold, auto=nearest", 3, true, true, SimSession.Sensor.PERFECT, 1, -1, false));
+    list.add(new Setup("Line mirror + hold, auto=threat", 3, true, true, SimSession.Sensor.PERFECT, 1, -1, true));
+    return list;
+  }
+
+  static int totalCycles(SimSession s) {
+    int total = 0;
+    for (SimWorld.Opponent o : s.world().opponents()) {
+      total += o.behavior().cyclesCompleted();
+    }
+    return total;
+  }
+
+  static String kindLabel(Scenarios.OpponentKind kind) {
+    return kind == Scenarios.OpponentKind.EVADER ? "Evader" : "Cycler";
   }
 
   /** Seeds averaged for each noisy-sensor row. */

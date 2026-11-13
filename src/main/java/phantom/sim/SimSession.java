@@ -127,6 +127,8 @@ public final class SimSession {
     private double estimateErrorSum = 0.0;
     private int estimateSamples = 0;
     private int opponentSamples = 0;
+    private int lastGuardedId = -1;
+    private int targetSwitches = 0;
 
     void record(SimSession s) {
       recordEstimates(s);
@@ -140,6 +142,13 @@ public final class SimSession {
       }
       engagedSeconds += DT;
       engagedSamples++;
+      int guarded = target.get().opponentId();
+      if (guarded >= 0) {
+        if (lastGuardedId >= 0 && guarded != lastGuardedId) {
+          targetSwitches++;
+        }
+        lastGuardedId = guarded;
+      }
       var selfPos = s.world.self().position();
       trackingErrorSum += selfPos.distanceTo(target.get().position());
 
@@ -179,6 +188,11 @@ public final class SimSession {
     /** Fraction of the time each opponent was being tracked at all (0..1). */
     public double trackCoverage() {
       return opponentSamples == 0 ? Double.NaN : (double) estimateSamples / opponentSamples;
+    }
+
+    /** Times the guarded opponent changed while engaged. */
+    public int targetSwitches() {
+      return targetSwitches;
     }
 
     public double engagedSeconds() {

@@ -139,6 +139,24 @@ class SimTest {
   }
 
   @Test
+  void batchWritesOneRowPerRun() throws IOException {
+    java.io.File out = java.io.File.createTempFile("phantom-batch", ".csv");
+    out.deleteOnExit();
+    BatchRunner.run(5.0, 1, out); // short runs, 1 seed
+    var lines = java.nio.file.Files.readAllLines(out.toPath());
+    assertEquals(BatchRunner.HEADER, lines.get(0));
+    // per opponent kind: 1 baseline + 18 setups x 3 sensors x 1 seed = 55 -> 2 kinds = 110 rows
+    int setups = SimMain.standardSetups().size() - 1 + SimMain.autoFocusSetups().size();
+    assertEquals(18, setups);
+    assertEquals(1 + 2 * (1 + setups * 3), lines.size());
+    int columns = BatchRunner.HEADER.split(",").length;
+    for (String line : lines.subList(1, lines.size())) {
+      String unquoted = line.replaceAll("\"[^\"]*\"", "x"); // quoted labels may contain commas
+      assertEquals(columns, unquoted.split(",", -1).length, line);
+    }
+  }
+
+  @Test
   void driverOverrideTakesControl() {
     SimSession s = SimSession.standard();
     s.step(new ChassisCommand(new Vec2(4.5, 0), 0), true);
