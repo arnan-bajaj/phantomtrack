@@ -8,7 +8,10 @@ import phantom.core.control.HolonomicController;
 import phantom.core.field.FieldConfig;
 import phantom.core.manager.DefenseAssist;
 import phantom.core.modes.DefenseTarget;
+import phantom.core.modes.InterposeMode;
+import phantom.core.modes.LineMirrorMode;
 import phantom.core.modes.ShadowMode;
+import phantom.core.modes.ZoneMode;
 import phantom.core.tracking.TrackedRobot;
 
 /**
@@ -26,7 +29,11 @@ public final class SimSession {
     this.world = world;
     this.assist =
         new DefenseAssist(
-            List.of(ShadowMode.defaults()),
+            List.of(
+                ShadowMode.defaults(),
+                InterposeMode.defaults(),
+                ZoneMode.defaults(),
+                LineMirrorMode.defaults()),
             HolonomicController.defaults(),
             DriverBlend.defaults(),
             new PerfectTracker(world),
@@ -61,6 +68,7 @@ public final class SimSession {
   /** Running statistics about how well the defense is doing. */
   public static final class Metrics {
     private double engagedSeconds = 0.0;
+    private double guardingSeconds = 0.0; // engaged AND reacting to a specific opponent
     private double goalSideSeconds = 0.0;
     private double trackingErrorSum = 0.0;
     private int engagedSamples = 0;
@@ -79,6 +87,10 @@ public final class SimSession {
       trackingErrorSum += selfPos.distanceTo(target.get().position());
 
       // Goal-side = we are closer to the goal than the opponent we are guarding.
+      if (target.get().opponentId() < 0) {
+        return; // e.g. Zone waiting at its anchor: nobody to be goal-side of
+      }
+      guardingSeconds += DT;
       var goal = s.world.field().defendedGoal();
       for (TrackedRobot r : s.world.truth()) {
         if (r.id() == target.get().opponentId()
@@ -92,9 +104,9 @@ public final class SimSession {
       return engagedSeconds;
     }
 
-    /** Fraction of engaged time spent goal-side of the guarded opponent (0..1). */
+    /** Fraction of guarding time spent goal-side of the guarded opponent (0..1). */
     public double goalSideFraction() {
-      return engagedSeconds == 0 ? Double.NaN : goalSideSeconds / engagedSeconds;
+      return guardingSeconds == 0 ? Double.NaN : goalSideSeconds / guardingSeconds;
     }
 
     /** Average distance between where we are and where the mode wants us (m). */

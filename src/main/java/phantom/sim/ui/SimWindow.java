@@ -35,9 +35,17 @@ public final class SimWindow extends JPanel {
             keysDown.add(e.getKeyCode());
             switch (e.getKeyCode()) {
               case KeyEvent.VK_P -> paused = !paused;
-              case KeyEvent.VK_R -> session = SimSession.standard();
+              case KeyEvent.VK_R -> {
+                int mode = session.assist().modeIndex();
+                session = SimSession.standard();
+                session.assist().setModeIndex(mode);
+              }
               case KeyEvent.VK_F -> cycleFocus();
               case KeyEvent.VK_M -> session.assist().nextMode();
+              case KeyEvent.VK_1 -> session.assist().setModeIndex(0);
+              case KeyEvent.VK_2 -> session.assist().setModeIndex(1);
+              case KeyEvent.VK_3 -> session.assist().setModeIndex(2);
+              case KeyEvent.VK_4 -> session.assist().setModeIndex(3);
               default -> {}
             }
           }

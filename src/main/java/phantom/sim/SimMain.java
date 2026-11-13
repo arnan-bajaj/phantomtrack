@@ -5,6 +5,9 @@ import java.awt.GraphicsEnvironment;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.function.Function;
 import javax.imageio.ImageIO;
 import phantom.core.control.ChassisCommand;
 import phantom.sim.ui.FieldRenderer;
@@ -15,7 +18,7 @@ import phantom.sim.ui.SimWindow;
  *
  * <pre>
  *   ./gradlew run                                   interactive window
- *   ./gradlew run --args="--headless"               60 s comparison, prints metrics, saves PNG
+ *   ./gradlew run --args="--headless"               60 s comparison of every mode, prints metrics, saves PNGs
  *   ./gradlew run --args="--headless 120"           same, 120 s
  * </pre>
  */
@@ -36,46 +39,86 @@ public final class SimMain {
     runHeadless(seconds);
   }
 
-  /** Runs the same scenario with no defense and with Shadow defense, and compares. */
+  /** Runs the same scenario with no defense and with each mode, and compares. */
   static void runHeadless(double seconds) throws IOException {
     int steps = (int) Math.round(seconds / SimSession.DT);
+    File dir = new File("snapshots");
+    dir.mkdirs();
+
+    List<String> names = new ArrayList<>();
+    List<SimSession> runs = new ArrayList<>();
 
     SimSession baseline = SimSession.standard();
     for (int i = 0; i < steps; i++) {
       baseline.step(ChassisCommand.STOP, false); // our robot parks
     }
+    names.add("No defense");
+    runs.add(baseline);
 
-    SimSession shadow = SimSession.standard();
-    BufferedImage midShot = null;
-    for (int i = 0; i < steps; i++) {
-      shadow.step(ChassisCommand.STOP, true); // assist drives the whole time
-      if (i == steps / 2) {
-        midShot = render(shadow);
+    int modeCount = baseline.assist().modes().size();
+    for (int m = 0; m < modeCount; m++) {
+      SimSession s = SimSession.standard();
+      s.assist().setModeIndex(m);
+      for (int i = 0; i < steps; i++) {
+        s.step(ChassisCommand.STOP, true); // assist drives the whole time
+        if (i == steps / 2) {
+          String file = s.assist().activeMode().name().toLowerCase().replace(' ', '-') + "-midrun.png";
+          ImageIO.write(render(s), "png", new File(dir, file));
+        }
       }
+      names.add(s.assist().activeMode().name());
+      runs.add(s);
     }
 
-    System.out.printf("PhantomTrack headless run: %.0f s, mode = %s%n%n", seconds,
-        shadow.assist().activeMode().name());
-    System.out.printf("%-28s %12s %12s%n", "", "No defense", "Shadow");
-    for (int i = 0; i < baseline.world().opponents().size(); i++) {
-      OpponentBehavior b0 = baseline.world().opponents().get(i).behavior();
-      OpponentBehavior b1 = shadow.world().opponents().get(i).behavior();
-      System.out.printf("%-28s %12d %12d%n", "Opponent #" + i + " cycles",
-          b0.cyclesCompleted(), b1.cyclesCompleted());
+    System.out.printf("PhantomTrack headless run: %.0f s, 3 Cycler opponents%n%n", seconds);
+    StringBuilder header = new StringBuilder(String.format("%-26s", ""));
+    for (String n : names) {
+      header.append(String.format("%13s", n));
     }
-    SimSession.Metrics m = shadow.metrics();
-    System.out.printf("%-28s %12s %11.0f%%%n", "Goal-side of guarded opp", "-",
-        100 * m.goalSideFraction());
-    System.out.printf("%-28s %12s %10.2f m%n", "Mean tracking error", "-", m.meanTrackingError());
-    System.out.printf("%-28s %12s %10.1f s%n", "Contact time", "-",
-        shadow.world().selfContactSeconds());
+    System.out.println(header);
 
-    File dir = new File("snapshots");
-    dir.mkdirs();
-    File out = new File(dir, "shadow-midrun.png");
-    ImageIO.write(midShot, "png", out);
+    int oppCount = baseline.world().opponents().size();
+    for (int o = 0; o < oppCount; o++) {
+      StringBuilder row = new StringBuilder(String.format("%-26s", "Opponent #" + o + " cycles"));
+      for (SimSession s : runs) {
+        row.append(String.format("%13d", s.world().opponents().get(o).behavior().cyclesCompleted()));
+      }
+      System.out.println(row);
+    }
+    printRow("Total cycles", runs, true, s -> {
+      int total = 0;
+      for (SimWorld.Opponent o : s.world().opponents()) {
+        total += o.behavior().cyclesCompleted();
+      }
+      return String.valueOf(total);
+    });
+    printRow("Goal-side when guarding", runs, false, s -> pct(s.metrics().goalSideFraction()));
+    printRow("Mean tracking error", runs, false, s -> meters(s.metrics().meanTrackingError()));
+    printRow("Contact time", runs, true, s -> String.format("%.1f s", s.world().selfContactSeconds()));
+
     System.out.println();
-    System.out.println("Saved " + out.getPath());
+    System.out.println("Saved mid-run snapshots to " + dir.getPath() + "/");
+  }
+
+  /**
+   * @param appliesToBaseline false for metrics that only exist while a mode is running
+   */
+  private static void printRow(
+      String label, List<SimSession> runs, boolean appliesToBaseline, Function<SimSession, String> f) {
+    StringBuilder row = new StringBuilder(String.format("%-26s", label));
+    for (int i = 0; i < runs.size(); i++) {
+      boolean skip = i == 0 && !appliesToBaseline;
+      row.append(String.format("%13s", skip ? "-" : f.apply(runs.get(i))));
+    }
+    System.out.println(row);
+  }
+
+  private static String pct(double fraction) {
+    return Double.isNaN(fraction) ? "-" : String.format("%.0f%%", 100 * fraction);
+  }
+
+  private static String meters(double m) {
+    return Double.isNaN(m) ? "-" : String.format("%.2f m", m);
   }
 
   static BufferedImage render(SimSession s) {

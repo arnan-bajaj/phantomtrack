@@ -14,7 +14,10 @@ import java.util.Optional;
 import phantom.core.field.FieldConfig;
 import phantom.core.geometry.Vec2;
 import phantom.core.manager.DefenseAssist;
+import phantom.core.modes.DefenseMode;
 import phantom.core.modes.DefenseTarget;
+import phantom.core.modes.LineMirrorMode;
+import phantom.core.modes.ZoneMode;
 import phantom.sim.RobotBody;
 import phantom.sim.SimSession;
 import phantom.sim.SimWorld;
@@ -69,6 +72,8 @@ public final class FieldRenderer {
     g.setStroke(new BasicStroke(1f));
     g.draw(new Line2D.Double(mid1.x(), mid1.y(), mid2.x(), mid2.y()));
 
+    drawModeOverlay(g, assist.activeMode(), field);
+
     // Pickups and goal
     g.setColor(MUTED);
     for (Vec2 p : field.opponentPickups()) {
@@ -119,6 +124,30 @@ public final class FieldRenderer {
     drawRobot(g, world.self(), field, SELF, false, "US");
 
     drawHud(g, width, height, session, focusId, paused);
+  }
+
+  /** Shows the geometry the active mode works with: Zone's circle, Line mirror's line. */
+  private void drawModeOverlay(Graphics2D g, DefenseMode mode, FieldConfig field) {
+    Color overlay = new Color(0x30, 0xc4, 0x6b, 70);
+    g.setColor(overlay);
+    g.setStroke(new BasicStroke(2f));
+    if (mode instanceof ZoneMode zone) {
+      Vec2 c = sx(zone.center(field));
+      double r = zone.radius() * scale;
+      g.fill(new Ellipse2D.Double(c.x() - r, c.y() - r, 2 * r, 2 * r));
+      Vec2 a = sx(zone.anchor(field));
+      g.setColor(TARGET);
+      g.draw(new Rectangle2D.Double(a.x() - 4, a.y() - 4, 8, 8));
+    } else if (mode instanceof LineMirrorMode line) {
+      Vec2 p0 = line.linePoint(field);
+      Vec2 t = line.lineDirection(field);
+      double span = Math.hypot(field.length(), field.width());
+      Vec2 a = sx(field.clampInside(p0.minus(t.times(span))));
+      Vec2 b = sx(field.clampInside(p0.plus(t.times(span))));
+      g.setColor(new Color(0x30, 0xc4, 0x6b, 160));
+      g.setStroke(new BasicStroke(4f));
+      g.draw(new Line2D.Double(a.x(), a.y(), b.x(), b.y()));
+    }
   }
 
   private void drawRobot(
@@ -177,7 +206,7 @@ public final class FieldRenderer {
             Double.isNaN(m.meanTrackingError()) ? "-" : String.format("%.2f m", m.meanTrackingError()),
             world.selfContactSeconds());
     String line3 =
-        "WASD drive   Q/E rotate   hold SPACE = assist   F = cycle focus   P = pause   R = reset";
+        "WASD drive   Q/E rotate   hold SPACE = assist   M or 1-4 = mode   F = focus   P = pause   R = reset";
 
     g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
     g.setColor(TEXT);

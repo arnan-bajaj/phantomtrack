@@ -36,5 +36,6 @@ code. Keep changes small, tested and explained.
 
 ## Roadmap status
 
-See README.md. Current phase: 1 done; next is Phase 2 (noisy tracker + Kalman filter) and an
-Evader opponent.
+See README.md. Done: Phase 1 (sim) and Phase 4 (four modes: Shadow, Interpose, Zone, Line
+mirror). Next: Evader opponent, a contact model where defenders resist pushing, then Phase 2
+(noisy tracker + Kalman filter).
