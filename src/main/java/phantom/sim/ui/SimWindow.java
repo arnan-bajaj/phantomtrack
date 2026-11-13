@@ -24,7 +24,9 @@ public final class SimWindow extends JPanel {
   private final FieldRenderer renderer = new FieldRenderer();
   private final Set<Integer> keysDown = new HashSet<>();
   private Scenarios.OpponentKind kind = Scenarios.OpponentKind.CYCLER;
-  private SimSession session = SimSession.standard(kind);
+  private SimSession.Sensor sensor = SimSession.Sensor.PERFECT;
+  private long seed = 1;
+  private SimSession session = SimSession.standard(kind, sensor, seed);
   private boolean paused = false;
 
   public SimWindow() {
@@ -38,6 +40,10 @@ public final class SimWindow extends JPanel {
             switch (e.getKeyCode()) {
               case KeyEvent.VK_P -> paused = !paused;
               case KeyEvent.VK_R -> reset();
+              case KeyEvent.VK_N -> {
+                sensor = sensor.next();
+                reset();
+              }
               case KeyEvent.VK_O -> {
                 kind =
                     kind == Scenarios.OpponentKind.CYCLER
@@ -79,7 +85,8 @@ public final class SimWindow extends JPanel {
     int mode = session.assist().modeIndex();
     int focus = session.assist().focusOpponentId();
     boolean hold = session.assist().holdEnabled();
-    session = SimSession.standard(kind);
+    seed++; // a fresh noise pattern each reset
+    session = SimSession.standard(kind, sensor, seed);
     session.assist().setModeIndex(mode);
     session.assist().setFocusOpponentId(focus);
     session.assist().setHoldEnabled(hold);

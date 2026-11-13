@@ -32,7 +32,8 @@ public final class DefenseAssist {
     OFF,
     ENGAGED,
     DRIVER_OVERRIDE,
-    NO_TARGET,
+    /** Engaged but nobody to defend: returning to the home spot and scanning. */
+    SEARCHING,
     /** RulesGuard is backing us off an opponent before the pin limit. */
     BACKING_OFF
   }
@@ -48,6 +49,8 @@ public final class DefenseAssist {
   private int modeIndex = 0;
   private int focusOpponentId = -1; // -1 = auto (nearest)
   private Optional<DefenseTarget> lastTarget = Optional.empty();
+  private List<TrackedRobot> lastOpponents = List.of();
+  private ChassisCommand lastCommand = ChassisCommand.STOP;
   private State lastState = State.OFF;
 
   public DefenseAssist(
@@ -77,31 +80,63 @@ public final class DefenseAssist {
   public ChassisCommand update(
       double nowSec, Pose self, Vec2 selfVelocity, ChassisCommand driver, boolean engaged) {
     List<TrackedRobot> opponents = tracker.getOpponents(nowSec);
+    lastOpponents = opponents;
     DefenseContext ctx =
         new DefenseContext(nowSec, self, selfVelocity, opponents, field, focusOpponentId);
     DefenseMode mode = holdEnabled ? HoldGroundMode.wrap(activeMode()) : activeMode();
     lastTarget = mode.compute(ctx);
     // The guard runs every loop (even when not engaged) so its pin timers stay accurate.
     if (guard != null) {
-      lastTarget = guard.apply(nowSec, self, opponents, lastTarget);
+      lastTarget =
+          guard.apply(nowSec, self, opponents, lastTarget, lastCommand.velocity(), selfVelocity);
     }
+    lastCommand = decide(nowSec, self, driver, engaged);
+    return lastCommand;
+  }
 
+  private ChassisCommand decide(double nowSec, Pose self, ChassisCommand driver, boolean engaged) {
     if (!engaged) {
       lastState = State.OFF;
-      return driver;
-    }
-    if (lastTarget.isEmpty()) {
-      lastState = State.NO_TARGET;
       return driver;
     }
     if (blend.isOverriding(driver, controller.maxSpeed())) {
       lastState = State.DRIVER_OVERRIDE;
       return driver;
     }
-    lastState = guard != null && guard.backingOff() ? State.BACKING_OFF : State.ENGAGED;
+    if (lastTarget.isEmpty()) {
+      lastState = State.SEARCHING;
+      ChassisCommand search = controller.calculate(self, searchTarget(nowSec));
+      return blend.blend(driver, search, true, controller.maxSpeed());
+    }
+    boolean backing = guard != null && (guard.backingOff() || guard.blindBackingOff(nowSec));
+    lastState = backing ? State.BACKING_OFF : State.ENGAGED;
     ChassisCommand assist = controller.calculate(self, lastTarget.get());
     return blend.blend(driver, assist, true, controller.maxSpeed());
   }
+
+  /**
+   * Where to wait and look when there is nothing to defend:
+   *
+   * <pre>
+   *   d       = unit(fieldCenter - goal)
+   *   home    = goal + HOME_DISTANCE * d
+   *   heading = angle(d) + SCAN_AMPLITUDE * sin(SCAN_RATE * t)   (sweep the cameras)
+   * </pre>
+   */
+  public DefenseTarget searchTarget(double nowSec) {
+    Vec2 goal = field.defendedGoal();
+    Vec2 d = new Vec2(field.length() / 2.0, field.width() / 2.0).minus(goal).normalized();
+    if (d.equals(Vec2.ZERO)) {
+      d = new Vec2(-1.0, 0.0);
+    }
+    Vec2 home = field.clampInside(goal.plus(d.times(HOME_DISTANCE)));
+    double heading = d.angle() + SCAN_AMPLITUDE * Math.sin(SCAN_RATE * nowSec);
+    return new DefenseTarget(home, heading, Vec2.ZERO, -1);
+  }
+
+  public static final double HOME_DISTANCE = 2.5; // m
+  public static final double SCAN_AMPLITUDE = 0.6; // rad (about 34 deg each way)
+  public static final double SCAN_RATE = 0.8; // rad/s
 
   public DefenseMode activeMode() {
     return modes.get(modeIndex);
@@ -159,6 +194,11 @@ public final class DefenseAssist {
   /** Number of times the guard forced a back-off (0 if disabled). */
   public int backoffsTriggered() {
     return guard == null ? 0 : guard.backoffsTriggered();
+  }
+
+  /** The opponent tracks used on the last update (what the robot "believes"). */
+  public List<TrackedRobot> lastOpponents() {
+    return lastOpponents;
   }
 
   public Optional<DefenseTarget> lastTarget() {

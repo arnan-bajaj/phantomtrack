@@ -18,6 +18,7 @@ import phantom.core.modes.DefenseMode;
 import phantom.core.modes.DefenseTarget;
 import phantom.core.modes.LineMirrorMode;
 import phantom.core.modes.ZoneMode;
+import phantom.core.tracking.TrackedRobot;
 import phantom.sim.RobotBody;
 import phantom.sim.SimSession;
 import phantom.sim.SimWorld;
@@ -117,6 +118,19 @@ public final class FieldRenderer {
       g.draw(new Line2D.Double(me.x(), me.y(), t.x(), t.y()));
     }
 
+    // What the robot believes (only differs from truth with a noisy sensor): hollow outlines
+    if (session.sensor() != SimSession.Sensor.PERFECT) {
+      g.setColor(new Color(0xff, 0xa0, 0xa0));
+      g.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f, new float[] {4f, 4f}, 0f));
+      for (TrackedRobot est : assist.lastOpponents()) {
+        Vec2 c = sx(est.positionAt(world.timeSec()));
+        double h = field.robotHalfSize() * scale;
+        g.draw(new Rectangle2D.Double(c.x() - h, c.y() - h, 2 * h, 2 * h));
+        Vec2 tip = sx(est.positionAt(world.timeSec()).plus(est.velocity().times(0.5)));
+        g.draw(new Line2D.Double(c.x(), c.y(), tip.x(), tip.y()));
+      }
+    }
+
     // Robots
     for (SimWorld.Opponent o : world.opponents()) {
       drawRobot(g, o.body(), field, OPP, o.body().id() == focusId, "#" + o.body().id());
@@ -186,12 +200,13 @@ public final class FieldRenderer {
             : "#" + assist.focusOpponentId();
     String line1 =
         String.format(
-            "t = %.1f s   |   Mode: %s   |   Assist: %s   |   Focus: %s   |   Opponents: %s%s",
+            "t = %.1f s   |   Mode: %s   |   Assist: %s   |   Focus: %s   |   Opponents: %s   |   Sensor: %s%s",
             world.timeSec(),
             assist.activeMode().name() + (assist.holdEnabled() ? " + hold" : ""),
             assist.lastState(),
             focus,
             world.opponents().isEmpty() ? "-" : world.opponents().get(0).behavior().name(),
+            s.sensor().label(),
             paused ? "   |   PAUSED" : "");
 
     StringBuilder cycles = new StringBuilder("Opponent cycles: ");
@@ -209,7 +224,7 @@ public final class FieldRenderer {
             world.pinViolations(),
             assist.backoffsTriggered());
     String line3 =
-        "WASD drive   J/L turn   hold SPACE = assist   M / 1-4 = mode   H = hold ground   F = focus   O = opponents   P = pause   R = reset";
+        "WASD drive   J/L turn   SPACE = assist   M / 1-4 = mode   H = hold   F = focus   O = opponents   N = sensor   P = pause   R = reset";
 
     g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
     g.setColor(TEXT);

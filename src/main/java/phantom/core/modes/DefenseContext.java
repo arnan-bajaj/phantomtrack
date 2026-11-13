@@ -25,7 +25,10 @@ public record DefenseContext(
     FieldConfig field,
     int focusOpponentId) {
 
-  /** The driver-selected opponent if it is being tracked, otherwise the nearest one. */
+  /**
+   * The driver-selected opponent if one is selected (empty if it is not currently tracked: we
+   * search for it rather than chase someone else), otherwise the nearest tracked opponent.
+   */
   public Optional<TrackedRobot> focusOpponent() {
     if (focusOpponentId >= 0) {
       for (TrackedRobot r : opponents) {
@@ -33,6 +36,7 @@ public record DefenseContext(
           return Optional.of(r);
         }
       }
+      return Optional.empty();
     }
     TrackedRobot best = null;
     double bestDist = Double.POSITIVE_INFINITY;
