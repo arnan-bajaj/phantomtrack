@@ -188,7 +188,7 @@ public final class FieldRenderer {
         String.format(
             "t = %.1f s   |   Mode: %s   |   Assist: %s   |   Focus: %s   |   Opponents: %s%s",
             world.timeSec(),
-            assist.activeMode().name(),
+            assist.activeMode().name() + (assist.holdEnabled() ? " + hold" : ""),
             assist.lastState(),
             focus,
             world.opponents().isEmpty() ? "-" : world.opponents().get(0).behavior().name(),
@@ -201,13 +201,15 @@ public final class FieldRenderer {
     SimSession.Metrics m = s.metrics();
     String line2 =
         String.format(
-            "%s|   Goal-side: %s   |   Tracking error: %s   |   Contact: %.1f s",
+            "%s|   Goal-side: %s   |   Tracking error: %s   |   Contact: %.1f s   |   Pins: %d   |   Back-offs: %d",
             cycles,
             Double.isNaN(m.goalSideFraction()) ? "-" : String.format("%.0f%%", 100 * m.goalSideFraction()),
             Double.isNaN(m.meanTrackingError()) ? "-" : String.format("%.2f m", m.meanTrackingError()),
-            world.selfContactSeconds());
+            world.selfContactSeconds(),
+            world.pinViolations(),
+            assist.backoffsTriggered());
     String line3 =
-        "WASD drive   J/L turn   hold SPACE = assist   M or 1-4 = mode   F = focus   O = opponent type   P = pause   R = reset";
+        "WASD drive   J/L turn   hold SPACE = assist   M / 1-4 = mode   H = hold ground   F = focus   O = opponents   P = pause   R = reset";
 
     g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
     g.setColor(TEXT);

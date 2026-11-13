@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.io.IOException;
 import org.junit.jupiter.api.Test;
 import phantom.core.control.ChassisCommand;
 import phantom.core.field.FieldConfig;
@@ -114,6 +115,27 @@ class SimTest {
     assertEquals("Shadow", s.assist().activeMode().name());
     s.assist().setModeIndex(99); // ignored
     assertEquals("Shadow", s.assist().activeMode().name());
+  }
+
+  @Test
+  void pinGuardPreventsViolationsThatHappenWithoutIt() throws IOException {
+    var kind = Scenarios.OpponentKind.CYCLER;
+    var guarded = SimMain.run(new SimMain.Setup("guarded", 3, true, true), kind, 180, null);
+    var unguarded = SimMain.run(new SimMain.Setup("unguarded", 3, true, false), kind, 180, null);
+    assertEquals(0, guarded.world().pinViolations());
+    assertTrue(guarded.assist().backoffsTriggered() > 0);
+    assertTrue(unguarded.world().pinViolations() > 0);
+  }
+
+  @Test
+  void holdGroundSlowsTheGuardedOpponent() throws IOException {
+    var kind = Scenarios.OpponentKind.EVADER;
+    var base = SimMain.run(new SimMain.Setup("none", -1, false, true), kind, 180, null);
+    var hold = SimMain.run(new SimMain.Setup("shadow+hold", 0, true, true), kind, 180, null);
+    double t0 = base.world().opponents().get(0).behavior().averageCycleSeconds();
+    double t1 = hold.world().opponents().get(0).behavior().averageCycleSeconds();
+    assertTrue(t1 > 1.1 * t0, "expected >10% slower, got " + t0 + " -> " + t1);
+    assertEquals(0, hold.world().pinViolations());
   }
 
   @Test

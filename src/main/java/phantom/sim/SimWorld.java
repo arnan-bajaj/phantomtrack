@@ -1,10 +1,16 @@
 package phantom.sim;
 
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import phantom.core.control.ChassisCommand;
 import phantom.core.field.FieldConfig;
 import phantom.core.geometry.Vec2;
+import phantom.core.rules.PinRules;
+import phantom.core.rules.PinTimer;
 import phantom.core.tracking.TrackedRobot;
 
 /**
@@ -21,10 +27,16 @@ public final class SimWorld {
   private double timeSec = 0.0;
   private double selfContactSeconds = 0.0;
 
+  // Referee view: counts pins from ground truth (no safety margin).
+  private final PinTimer refereePins;
+  private final Set<Integer> violationCounted = new HashSet<>();
+  private int pinViolations = 0;
+
   public SimWorld(FieldConfig field, RobotBody self, List<Opponent> opponents) {
     this.field = field;
     this.self = self;
     this.opponents = new ArrayList<>(opponents);
+    this.refereePins = new PinTimer(PinRules.placeholder(), field.robotHalfSize());
   }
 
   /** Advance the world by dt seconds with our robot following selfCmd. */
@@ -48,6 +60,31 @@ public final class SimWorld {
       selfContactSeconds += dt;
     }
     timeSec += dt;
+    countPins();
+  }
+
+  /**
+   * One violation per pin episode whose contact time reaches the limit. Like a referee, only
+   * counts contact while we are driving into that opponent (effort > 0.1), not while we are being
+   * pushed or are backing away.
+   */
+  private void countPins() {
+    Map<Integer, Vec2> positions = new HashMap<>();
+    Map<Integer, Vec2> towardOpp = new HashMap<>();
+    for (Opponent o : opponents) {
+      positions.put(o.body().id(), o.body().position());
+      towardOpp.put(o.body().id(), o.body().position().minus(self.position()).normalized());
+    }
+    refereePins.update(timeSec, self.position(), positions,
+        id -> Contact.effort(self.desiredVelocity(), towardOpp.get(id), self.maxSpeed()) > 0.1);
+    double limit = refereePins.rules().limitSeconds();
+    for (int id : positions.keySet()) {
+      if (!refereePins.episodeOpen(id)) {
+        violationCounted.remove(id);
+      } else if (refereePins.contactSeconds(id) >= limit && violationCounted.add(id)) {
+        pinViolations++;
+      }
+    }
   }
 
   /**
@@ -128,6 +165,11 @@ public final class SimWorld {
 
   public double timeSec() {
     return timeSec;
+  }
+
+  /** Pin episodes that reached the limit, counting only time we spent driving into them. */
+  public int pinViolations() {
+    return pinViolations;
   }
 
   /** Total seconds our robot has been in contact with any opponent. */

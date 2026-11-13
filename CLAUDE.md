@@ -37,9 +37,9 @@ code. Keep changes small, tested and explained.
 ## Roadmap status
 
 See README.md. Done: Phase 1 (sim), Phase 4 (four modes: Shadow, Interpose, Zone, Line mirror),
-Evader opponent and pushing-match contact model. Key finding: only modes that hold ground on contact
-slow opponents. Next: "hold" behavior for standoff modes + RulesGuard pin timer, then Phase 2
-(noisy tracker + Kalman filter).
+Evader opponent and pushing-match contact model, hold ground + RulesGuard pin timer. Key finding:
+holding ground on contact is what slows opponents; the pin guard keeps it legal. Next: Phase 2
+(noisy tracker + Kalman filter), target selection, batch CSV.
 
 ## Workflow
 
