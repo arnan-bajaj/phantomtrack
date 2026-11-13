@@ -47,6 +47,7 @@ public final class SimWindow extends JPanel {
               }
               case KeyEvent.VK_F -> cycleFocus();
               case KeyEvent.VK_M -> session.assist().nextMode();
+              case KeyEvent.VK_H -> session.assist().setHoldEnabled(!session.assist().holdEnabled());
               case KeyEvent.VK_1 -> session.assist().setModeIndex(0);
               case KeyEvent.VK_2 -> session.assist().setModeIndex(1);
               case KeyEvent.VK_3 -> session.assist().setModeIndex(2);
@@ -77,9 +78,11 @@ public final class SimWindow extends JPanel {
   private void reset() {
     int mode = session.assist().modeIndex();
     int focus = session.assist().focusOpponentId();
+    boolean hold = session.assist().holdEnabled();
     session = SimSession.standard(kind);
     session.assist().setModeIndex(mode);
     session.assist().setFocusOpponentId(focus);
+    session.assist().setHoldEnabled(hold);
   }
 
   /** Cycle focus: auto -> #0 -> #1 -> ... -> auto. */

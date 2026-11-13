@@ -78,7 +78,8 @@ public final class SimSession {
     private int engagedSamples = 0;
 
     void record(SimSession s) {
-      if (s.assist.lastState() != DefenseAssist.State.ENGAGED) {
+      DefenseAssist.State st = s.assist.lastState();
+      if (st != DefenseAssist.State.ENGAGED && st != DefenseAssist.State.BACKING_OFF) {
         return;
       }
       Optional<DefenseTarget> target = s.assist.lastTarget();

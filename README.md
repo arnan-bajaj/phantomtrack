@@ -33,6 +33,7 @@ terminal.
 | F | cycle focus opponent: auto (nearest) → #0 → #1 → #2 → auto |
 | O | switch opponent type (Cycler ↔ Evader) and restart |
 | M | next defense mode |
+| H | toggle **hold ground** (stop retreating on contact, push back) |
 | 1 / 2 / 3 / 4 | Shadow / Interpose / Zone / Line mirror |
 | P | pause |
 | R | reset |
@@ -51,6 +52,13 @@ HUD shows the assist state (OFF / ENGAGED / DRIVER_OVERRIDE / NO_TARGET).
 
 The formula for each mode is in its class comment in `src/main/java/phantom/core/modes/`.
 
+**Hold ground (H)** wraps any mode: once the opponent it's guarding gets within 0.3 m (bumper to
+bumper) and we're goal-side, the robot stops retreating and pushes straight back.
+
+**Pin guard (`RulesGuard`, always on)** times contact with each opponent. At 2.5 s (0.5 s before the
+3 s placeholder limit) it steps the robot *sideways* out of the opponent's path until they are
+1.83 m apart. Limits live in `PinRules` and must be updated from the 2027 manual.
+
 ## How it's organized
 
 ```
@@ -60,7 +68,8 @@ src/main/java/phantom/
     field/         FieldConfig: field size, goal, pickups (placeholder until 2027 kickoff)
     tracking/      TrackedRobot, OpponentTracker  <- the ONLY way defense code sees opponents
     modes/         DefenseMode interface + Shadow, Interpose, Zone, LineMirror modes
-    control/       HolonomicController (target -> velocity), DriverBlend (driver override)
+    control/       HolonomicController (target -> velocity), DriverBlend (driver override), RulesGuard (pin limit)
+    rules/         PinRules (game-manual numbers), PinTimer (contact time per opponent)
     manager/       DefenseAssist: tracker -> mode -> controller -> blend, once per 20 ms loop
   sim/             Simulator only. Never used on the robot.
     RobotBody      kinematic swerve with speed/accel limits
@@ -82,42 +91,42 @@ over NetworkTables, then vision. Nothing in `core/modes` or `core/control` chang
 - [ ] Phase 2: noisy/laggy tracker + Kalman filter for opponent velocity
 - [x] Evader opponent (dodges the defender) and a pushing-match contact model
 - [x] Phase 4: Interpose, Zone (intercept math), Line mirror modes
-- [ ] Phase 5: target selection with hysteresis, confidence fallback, pin timer (RulesGuard)
+- [x] Hold-ground behavior + pin timer (RulesGuard) with sideways back-off
+- [ ] Phase 5: target selection with hysteresis, confidence fallback
 - [ ] Phase 6: batch runs with CSV metrics
 - [ ] Phase 7: real robot (AprilTag pose) with simulated ghost opponents
 - [ ] Phase 8: vision-based opponent tracking
 
 ## Current findings
 
-Headless 180 s runs. Man-to-man modes guard opponent #0; Zone picks its own threat. "No defense"
-parks our robot in a corner. The key number is how much the guarded opponent's average cycle time
-goes up.
+Headless 180 s runs (`./gradlew run --args="--headless"`). Man-to-man modes guard opponent #0;
+Zone picks its own threat. "No defense" parks our robot in a corner. **Slowed** = how much the
+guarded opponent's average cycle time went up. **Pins** are counted like a referee would: only
+contact time while we are driving into that opponent, one per episode that reaches 3 s.
 
-**Cycler opponents** (drive straight, push through):
-
-| | No defense | Shadow | Interpose | Zone | Line mirror |
-| --- | --- | --- | --- | --- | --- |
-| Guarded opp avg cycle | 7.15 s | 7.29 s | 7.09 s | 7.36 s | 12.00 s |
-| Slowed by | – | +2% | −1% | +3% | **+68%** |
-| Total cycles (all 3 opps) | 76 | 75 | 77 | 74 | 66 |
-| Contact time | 0.0 s | 9.1 s | 4.4 s | 35.3 s | 81.7 s |
-
-**Evader opponents** (steer around robots in their way):
-
-| | No defense | Shadow | Interpose | Zone | Line mirror |
-| --- | --- | --- | --- | --- | --- |
-| Guarded opp avg cycle | 7.17 s | 7.60 s | 6.99 s | 7.18 s | 8.91 s |
-| Slowed by | – | +6% | −3% | +0% | **+24%** |
-| Total cycles (all 3 opps) | 79 | 75 | 79 | 75 | 71 |
-| Contact time | 0.0 s | 5.6 s | 2.9 s | 4.6 s | 32.7 s |
+| Setup | vs Cyclers (push through) | vs Evaders (dodge) | Pins (C / E) |
+| --- | --- | --- | --- |
+| Shadow | +6% | +9% | 0 / 0 |
+| **Shadow + hold** | **+23%** | **+30%** | **0 / 0** |
+| Interpose | −1% | −3% | 0 / 0 |
+| Interpose + hold | +6% | +3% | 0 / 0 |
+| Zone | +3% | +0% | 0 / 0 |
+| Zone + hold | +4% | +1% | 0 / 0 |
+| Line mirror | +35% | +24% | 0 / 0 |
+| Line mirror + hold | +38% | +28% | 0 / 0 |
+| Shadow + hold, **no pin guard** | +28% | +126% | 9 / 3 |
+| Line mirror + hold, **no pin guard** | +50% | +27% | 17 / 0 |
 
 What this says:
 
-- **Modes that keep a standoff distance (Shadow, Interpose, Zone) don't slow anyone.** When the
-  opponent drives at them they back away to keep their distance, so they escort the opponent to
-  the goal. Good positioning, zero cost to the opponent. Differences of a few percent are noise.
-- **Line mirror is the only mode that costs cycles**, because it holds its line and pushes back.
-  That also means the most contact (82 s of 180 against Cyclers), which is pinning-foul risk.
-- **Takeaway: defense that works needs to hold ground on contact,** and that has to be limited by
-  a pin timer. Next step: a "hold" behavior for the standoff modes plus a RulesGuard that backs off
-  before the pin limit.
+- **Holding ground is what makes defense work.** Shadow goes from +6–9% to +23–30% just by not
+  retreating on contact, and stays legal.
+- **The pin guard costs a little effectiveness and removes every pin.** Without it, the numbers
+  look better (Shadow + hold jams an Evader for 166 of 180 s) but every one of those runs would
+  draw fouls.
+- **Line mirror and Shadow + hold are the two strongest legal setups.** Line mirror is better
+  against bulldozers, Shadow + hold against robots that dodge.
+- **Interpose and Zone barely matter** in this scenario. Both stand far from the opponent, so they
+  rarely get the contact that hold needs.
+- Limits: one defender, three opponents with fixed routes, no game pieces, idealized pushing. Treat
+  the ranking as a direction, not a guarantee.
