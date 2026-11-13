@@ -41,7 +41,11 @@ public final class SimSession {
   }
 
   public static SimSession standard() {
-    return new SimSession(Scenarios.threeCyclers(FieldConfig.placeholder()));
+    return standard(Scenarios.OpponentKind.CYCLER);
+  }
+
+  public static SimSession standard(Scenarios.OpponentKind kind) {
+    return new SimSession(Scenarios.three(FieldConfig.placeholder(), kind));
   }
 
   /** Run one 20 ms loop: assist decides, world moves, metrics update. */
