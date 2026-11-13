@@ -207,7 +207,7 @@ public final class FieldRenderer {
             Double.isNaN(m.meanTrackingError()) ? "-" : String.format("%.2f m", m.meanTrackingError()),
             world.selfContactSeconds());
     String line3 =
-        "WASD drive   Q/E rotate   hold SPACE = assist   M or 1-4 = mode   F = focus   O = opponent type   P = pause   R = reset";
+        "WASD drive   J/L turn   hold SPACE = assist   M or 1-4 = mode   F = focus   O = opponent type   P = pause   R = reset";
 
     g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
     g.setColor(TEXT);

@@ -28,7 +28,7 @@ terminal.
 | Key | Action |
 | --- | --- |
 | W A S D | drive (field-relative, full speed) |
-| Q / E | rotate |
+| J / L | turn left / right |
 | hold SPACE | engage the defense assist |
 | F | cycle focus opponent: auto (nearest) → #0 → #1 → #2 → auto |
 | O | switch opponent type (Cycler ↔ Evader) and restart |
