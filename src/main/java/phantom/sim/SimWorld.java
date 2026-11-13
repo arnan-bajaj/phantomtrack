@@ -51,8 +51,9 @@ public final class SimWorld {
   }
 
   /**
-   * Treat robots as circles of radius robotHalfSize. Push overlapping pairs apart equally and
-   * remove the part of their velocity that drives them into each other.
+   * Treat robots as circles of radius robotHalfSize. Overlapping pairs are separated and given a
+   * shared velocity along the contact normal according to the pushing-match model in {@link
+   * Contact}: whoever is driving harder into the other wins; equal effort stalls.
    *
    * @return true if our robot touched any opponent
    */
@@ -73,14 +74,19 @@ public final class SimWorld {
           selfTouching = true;
         }
         Vec2 n = dist < 1e-9 ? new Vec2(1.0, 0.0) : delta.times(1.0 / dist);
+        double effortA = Contact.effort(a.desiredVelocity(), n, a.maxSpeed());
+        double effortB = Contact.effort(b.desiredVelocity(), n.times(-1.0), b.maxSpeed());
+
         double overlap = minDist - dist;
-        a.setPosition(a.position().minus(n.times(overlap / 2.0)));
-        b.setPosition(b.position().plus(n.times(overlap / 2.0)));
+        double shareB = Contact.overlapShareB(effortA, effortB);
+        a.setPosition(a.position().minus(n.times(overlap * (1.0 - shareB))));
+        b.setPosition(b.position().plus(n.times(overlap * shareB)));
 
         double closing = a.velocity().minus(b.velocity()).dot(n); // > 0 means approaching
         if (closing > 0) {
-          a.setVelocity(a.velocity().minus(n.times(closing / 2.0)));
-          b.setVelocity(b.velocity().plus(n.times(closing / 2.0)));
+          double vn = Contact.contactSpeed(effortA, effortB);
+          a.setVelocity(a.velocity().minus(n.times(a.velocity().dot(n) - vn)));
+          b.setVelocity(b.velocity().minus(n.times(b.velocity().dot(n) - vn)));
         }
         a.keepInside(field);
         b.keepInside(field);

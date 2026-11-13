@@ -36,6 +36,13 @@ code. Keep changes small, tested and explained.
 
 ## Roadmap status
 
-See README.md. Done: Phase 1 (sim) and Phase 4 (four modes: Shadow, Interpose, Zone, Line
-mirror). Next: Evader opponent, a contact model where defenders resist pushing, then Phase 2
+See README.md. Done: Phase 1 (sim), Phase 4 (four modes: Shadow, Interpose, Zone, Line mirror),
+Evader opponent and pushing-match contact model. Key finding: only modes that hold ground on contact
+slow opponents. Next: "hold" behavior for standoff modes + RulesGuard pin timer, then Phase 2
 (noisy tracker + Kalman filter).
+
+## Workflow
+
+- Work on a branch, open a PR with the metrics table in its description.
+- The repo owner has given permission for Claude to merge its own PRs once `./gradlew test` passes
+  and the headless run has been reported.

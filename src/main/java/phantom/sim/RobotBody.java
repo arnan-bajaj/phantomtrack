@@ -19,6 +19,7 @@ public final class RobotBody {
 
   private Vec2 position;
   private Vec2 velocity = Vec2.ZERO;
+  private Vec2 desiredVelocity = Vec2.ZERO; // last command, used by the pushing model
   private double heading;
   private double omega = 0.0;
 
@@ -48,6 +49,7 @@ public final class RobotBody {
   public void step(ChassisCommand cmd, double dt, FieldConfig field) {
     // Translation: move velocity toward the command, at most maxAccel * dt per step.
     Vec2 desired = cmd.velocity().clampNorm(maxSpeed);
+    desiredVelocity = desired;
     Vec2 dv = desired.minus(velocity).clampNorm(maxAccel * dt);
     velocity = velocity.plus(dv).clampNorm(maxSpeed);
 
@@ -90,6 +92,11 @@ public final class RobotBody {
 
   public Vec2 velocity() {
     return velocity;
+  }
+
+  /** The velocity this robot is trying to drive at (its last command, speed-capped). */
+  public Vec2 desiredVelocity() {
+    return desiredVelocity;
   }
 
   public double heading() {

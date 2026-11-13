@@ -13,6 +13,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import phantom.core.control.ChassisCommand;
 import phantom.core.geometry.Vec2;
+import phantom.sim.Scenarios;
 import phantom.sim.SimSession;
 
 /** Interactive sim window. You drive with the keyboard; hold SPACE to let the assist drive. */
@@ -22,7 +23,8 @@ public final class SimWindow extends JPanel {
 
   private final FieldRenderer renderer = new FieldRenderer();
   private final Set<Integer> keysDown = new HashSet<>();
-  private SimSession session = SimSession.standard();
+  private Scenarios.OpponentKind kind = Scenarios.OpponentKind.CYCLER;
+  private SimSession session = SimSession.standard(kind);
   private boolean paused = false;
 
   public SimWindow() {
@@ -35,10 +37,13 @@ public final class SimWindow extends JPanel {
             keysDown.add(e.getKeyCode());
             switch (e.getKeyCode()) {
               case KeyEvent.VK_P -> paused = !paused;
-              case KeyEvent.VK_R -> {
-                int mode = session.assist().modeIndex();
-                session = SimSession.standard();
-                session.assist().setModeIndex(mode);
+              case KeyEvent.VK_R -> reset();
+              case KeyEvent.VK_O -> {
+                kind =
+                    kind == Scenarios.OpponentKind.CYCLER
+                        ? Scenarios.OpponentKind.EVADER
+                        : Scenarios.OpponentKind.CYCLER;
+                reset();
               }
               case KeyEvent.VK_F -> cycleFocus();
               case KeyEvent.VK_M -> session.assist().nextMode();
@@ -66,6 +71,15 @@ public final class SimWindow extends JPanel {
               repaint();
             })
         .start();
+  }
+
+  /** Restart the scenario, keeping the selected mode and focus. */
+  private void reset() {
+    int mode = session.assist().modeIndex();
+    int focus = session.assist().focusOpponentId();
+    session = SimSession.standard(kind);
+    session.assist().setModeIndex(mode);
+    session.assist().setFocusOpponentId(focus);
   }
 
   /** Cycle focus: auto -> #0 -> #1 -> ... -> auto. */

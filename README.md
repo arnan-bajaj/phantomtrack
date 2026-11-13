@@ -12,7 +12,7 @@ You need Java 17 or newer. The JDK that comes with WPILib works.
 
 ```bash
 ./gradlew run                          # interactive sim window
-./gradlew run --args="--headless"      # 60 s run: no defense vs. every mode, prints metrics, saves snapshots/*.png
+./gradlew run --args="--headless"      # 180 s: no defense vs. every mode, both opponent types; saves snapshots/*.png
 ./gradlew test                         # unit tests
 ```
 
@@ -31,6 +31,7 @@ terminal.
 | Q / E | rotate |
 | hold SPACE | engage the defense assist |
 | F | cycle focus opponent: auto (nearest) → #0 → #1 → #2 → auto |
+| O | switch opponent type (Cycler ↔ Evader) and restart |
 | M | next defense mode |
 | 1 / 2 / 3 / 4 | Shadow / Interpose / Zone / Line mirror |
 | P | pause |
@@ -63,7 +64,9 @@ src/main/java/phantom/
     manager/       DefenseAssist: tracker -> mode -> controller -> blend, once per 20 ms loop
   sim/             Simulator only. Never used on the robot.
     RobotBody      kinematic swerve with speed/accel limits
-    CyclerBehavior opponent bot: pickup -> goal -> repeat
+    CyclerBehavior opponent bot: pickup -> goal -> repeat (Cycler pushes through, Evader dodges)
+    Avoidance      Evader's steering around robots in its path
+    Contact        pushing-match model: whoever drives harder into the other wins
     SimWorld       ground truth + collisions
     PerfectTracker OpponentTracker that reports exact truth (noisy version comes in Phase 2)
     ui/            Swing window + renderer
@@ -77,7 +80,7 @@ over NetworkTables, then vision. Nothing in `core/modes` or `core/control` chang
 
 - [x] Phase 1: sim world, Cycler opponents, Shadow mode, controller, driver override, metrics
 - [ ] Phase 2: noisy/laggy tracker + Kalman filter for opponent velocity
-- [ ] Evader opponent (dodges the defender), so modes are tested against someone fighting back
+- [x] Evader opponent (dodges the defender) and a pushing-match contact model
 - [x] Phase 4: Interpose, Zone (intercept math), Line mirror modes
 - [ ] Phase 5: target selection with hysteresis, confidence fallback, pin timer (RulesGuard)
 - [ ] Phase 6: batch runs with CSV metrics
@@ -86,20 +89,35 @@ over NetworkTables, then vision. Nothing in `core/modes` or `core/control` chang
 
 ## Current findings
 
-Headless 60 s run, three Cycler opponents (they drive straight to the goal and push through):
+Headless 180 s runs. Man-to-man modes guard opponent #0; Zone picks its own threat. "No defense"
+parks our robot in a corner. The key number is how much the guarded opponent's average cycle time
+goes up.
+
+**Cycler opponents** (drive straight, push through):
 
 | | No defense | Shadow | Interpose | Zone | Line mirror |
 | --- | --- | --- | --- | --- | --- |
-| Total opponent cycles | 27 | 27 | 27 | 25 | 22 |
-| Goal-side when guarding | – | 90% | 100% | 91% | 46% |
-| Mean tracking error | – | 0.91 m | 0.17 m | 0.81 m | 0.96 m |
-| Contact time | 1.3 s | 26.6 s | 7.7 s | 13.0 s | 36.2 s |
+| Guarded opp avg cycle | 7.15 s | 7.29 s | 7.09 s | 7.36 s | 12.00 s |
+| Slowed by | – | +2% | −1% | +3% | **+68%** |
+| Total cycles (all 3 opps) | 76 | 75 | 77 | 74 | 66 |
+| Contact time | 0.0 s | 9.1 s | 4.4 s | 35.3 s | 81.7 s |
 
-What this says, honestly:
+**Evader opponents** (steer around robots in their way):
 
-- **Interpose positions best** (always goal-side, 0.17 m from its target) but costs Cyclers nothing,
-  because they shove through anyone in the way.
-- **Line mirror cuts the most cycles (27 to 22), but only by making contact for 36 s of 60.** In a
-  real match that is pinning-foul risk, and the sim's pushing model is too simple to trust it.
-- These numbers will change a lot once (a) opponents dodge (Evader), and (b) the contact model lets
-  a defender holding position resist being pushed. Don't pick a "best mode" from this table yet.
+| | No defense | Shadow | Interpose | Zone | Line mirror |
+| --- | --- | --- | --- | --- | --- |
+| Guarded opp avg cycle | 7.17 s | 7.60 s | 6.99 s | 7.18 s | 8.91 s |
+| Slowed by | – | +6% | −3% | +0% | **+24%** |
+| Total cycles (all 3 opps) | 79 | 75 | 79 | 75 | 71 |
+| Contact time | 0.0 s | 5.6 s | 2.9 s | 4.6 s | 32.7 s |
+
+What this says:
+
+- **Modes that keep a standoff distance (Shadow, Interpose, Zone) don't slow anyone.** When the
+  opponent drives at them they back away to keep their distance, so they escort the opponent to
+  the goal. Good positioning, zero cost to the opponent. Differences of a few percent are noise.
+- **Line mirror is the only mode that costs cycles**, because it holds its line and pushes back.
+  That also means the most contact (82 s of 180 against Cyclers), which is pinning-foul risk.
+- **Takeaway: defense that works needs to hold ground on contact,** and that has to be limited by
+  a pin timer. Next step: a "hold" behavior for the standoff modes plus a RulesGuard that backs off
+  before the pin limit.
