@@ -47,7 +47,9 @@ public final class DefenseAssist {
   private RulesGuard guard; // null = disabled
   private boolean holdEnabled = false;
   private int modeIndex = 0;
-  private int focusOpponentId = -1; // -1 = auto (nearest)
+  private int focusOpponentId = -1; // -1 = auto
+  private final TargetSelector selector = TargetSelector.defaults();
+  private boolean useThreatSelector = true; // auto focus: threat-based with hysteresis (else nearest)
   private Optional<DefenseTarget> lastTarget = Optional.empty();
   private List<TrackedRobot> lastOpponents = List.of();
   private ChassisCommand lastCommand = ChassisCommand.STOP;
@@ -81,8 +83,11 @@ public final class DefenseAssist {
       double nowSec, Pose self, Vec2 selfVelocity, ChassisCommand driver, boolean engaged) {
     List<TrackedRobot> opponents = tracker.getOpponents(nowSec);
     lastOpponents = opponents;
-    DefenseContext ctx =
-        new DefenseContext(nowSec, self, selfVelocity, opponents, field, focusOpponentId);
+    int focus = focusOpponentId;
+    if (focus < 0 && useThreatSelector) {
+      focus = selector.select(nowSec, opponents, field.defendedGoal());
+    }
+    DefenseContext ctx = new DefenseContext(nowSec, self, selfVelocity, opponents, field, focus);
     DefenseMode mode = holdEnabled ? HoldGroundMode.wrap(activeMode()) : activeMode();
     lastTarget = mode.compute(ctx);
     // The guard runs every loop (even when not engaged) so its pin timers stay accurate.
@@ -165,9 +170,23 @@ public final class DefenseAssist {
     return focusOpponentId;
   }
 
-  /** -1 = auto (nearest opponent). */
+  /** -1 = auto (threat-based selection, or nearest if the selector is off). */
   public void setFocusOpponentId(int id) {
     this.focusOpponentId = id;
+  }
+
+  /** Auto focus picks by threat with hysteresis (true, default) or just the nearest (false). */
+  public void setThreatSelectorEnabled(boolean enabled) {
+    this.useThreatSelector = enabled;
+  }
+
+  public boolean threatSelectorEnabled() {
+    return useThreatSelector;
+  }
+
+  /** How many times auto focus changed targets. */
+  public int autoTargetSwitches() {
+    return selector.switches();
   }
 
   public boolean holdEnabled() {

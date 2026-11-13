@@ -13,6 +13,8 @@ You need Java 17 or newer. The JDK that comes with WPILib works.
 ```bash
 ./gradlew run                          # interactive sim window
 ./gradlew run --args="--headless"      # 180 s: no defense vs. every mode, both opponent types; saves snapshots/*.png
+./gradlew run --args="--batch"         # every setup x opponents x sensor x 3 seeds -> results/batch.csv
+./gradlew run --args="--batch 180 10"  # same, 180 s per run, 10 seeds
 ./gradlew test                         # unit tests
 ```
 
@@ -30,7 +32,7 @@ terminal.
 | W A S D | drive (field-relative, full speed) |
 | J / L | turn left / right |
 | hold SPACE | engage the defense assist |
-| F | cycle focus opponent: auto (nearest) → #0 → #1 → #2 → auto |
+| F | cycle focus opponent: auto → #0 → #1 → #2 → auto |
 | O | switch opponent type (Cycler ↔ Evader) and restart |
 | N | switch sensor: Perfect → Realistic → Bad camera, and restart |
 | M | next defense mode |
@@ -57,6 +59,10 @@ The formula for each mode is in its class comment in `src/main/java/phantom/core
 **Hold ground (H)** wraps any mode: once the opponent it's guarding gets within 0.3 m (bumper to
 bumper) and we're goal-side, the robot stops retreating and pushes straight back.
 
+**Auto focus** (focus = auto): a `TargetSelector` picks the opponent most likely to score soon,
+stays on it until it turns away from the goal, then picks up the next one. It only jumps early if
+someone else will reach the goal at least 2 s sooner, for 0.5 s straight.
+
 **Pin guard (`RulesGuard`, always on)** times contact with each opponent. At 2.5 s (0.5 s before the
 3 s placeholder limit) it steps the robot *sideways* out of the opponent's path until they are
 1.83 m apart. Limits live in `PinRules` and must be updated from the 2027 manual.
@@ -74,6 +80,7 @@ src/main/java/phantom/
     control/       HolonomicController (target -> velocity), DriverBlend (driver override), RulesGuard (pin limit)
     rules/         PinRules (game-manual numbers), PinTimer (contact time per opponent)
     manager/       DefenseAssist: tracker -> mode -> controller -> blend, once per 20 ms loop
+                   TargetSelector: who to guard when focus is auto
   sim/             Simulator only. Never used on the robot.
     RobotBody      kinematic swerve with speed/accel limits
     CyclerBehavior opponent bot: pickup -> goal -> repeat (Cycler pushes through, Evader dodges)
@@ -82,6 +89,7 @@ src/main/java/phantom/
     SimWorld       ground truth + collisions
     PerfectTracker OpponentTracker that reports exact truth
     NoisySensor    simulated camera: FOV, range, noise, latency, dropouts (feeds KalmanOpponentTracker)
+    BatchRunner    every combination x seeds -> CSV for graphing
     ui/            Swing window + renderer
 ```
 
@@ -96,8 +104,8 @@ over NetworkTables, then vision. Nothing in `core/modes` or `core/control` chang
 - [x] Evader opponent (dodges the defender) and a pushing-match contact model
 - [x] Phase 4: Interpose, Zone (intercept math), Line mirror modes
 - [x] Hold-ground behavior + pin timer (RulesGuard) with sideways back-off
-- [ ] Phase 5: target selection with hysteresis, confidence fallback
-- [ ] Phase 6: batch runs with CSV metrics
+- [x] Phase 5: target selection (stay on scorer until it turns away), search when nothing is visible
+- [x] Phase 6: batch runs with CSV metrics (`--batch`)
 - [ ] Phase 7: real robot (AprilTag pose) with simulated ghost opponents
 - [ ] Phase 8: vision-based opponent tracking
 
@@ -150,5 +158,22 @@ What this says:
   pin slips through every 4–5 minutes of defending. The robot's own sense of being blocked (pushing
   but not moving) already catches most of it. On the real robot, add contact sensing (drive motor
   current spikes) before trusting it in a match.
+### Who to guard when nobody is chosen (effect on all three opponents' total cycles)
+
+| Setup | vs Cyclers | vs Evaders |
+| --- | --- | --- |
+| Shadow + hold, locked on one scorer | **+9%** | +10% |
+| Shadow + hold, auto = nearest | +4% | +10% |
+| Shadow + hold, auto = threat | +7% | +5% |
+| Line mirror + hold, locked on one scorer | +6% | +11% |
+| Line mirror + hold, auto = nearest | +10% | +13% |
+| Line mirror + hold, auto = threat | **+15%** | +13% |
+
+- **Man-to-man (Shadow): pick one scorer and stay on them.** Switching costs more than it gains.
+- **Positional defense (Line mirror): let it take whoever comes through** (auto = threat).
+- Totals move by about ±1 cycle (≈ ±1.5%) between runs, so treat small gaps as ties.
+- Oddity: plain Shadow does better with a noisy camera (+20%) than with perfect tracking (+2%).
+  Tracking lag makes it drift into the opponent's path, which accidentally acts like hold.
+
 - Limits: one defender, three opponents with fixed routes, no game pieces, idealized pushing,
   opponent identity assumed known. Treat rankings as direction, not guarantees.

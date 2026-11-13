@@ -40,7 +40,9 @@ See README.md. Done: Phase 1 (sim), Phase 4 (four modes: Shadow, Interpose, Zone
 Evader opponent and pushing-match contact model, hold ground + RulesGuard pin timer, Phase 2
 (simulated camera + Kalman filter, search behavior, stall detection). Key findings: holding ground
 is what slows opponents; a realistic camera halves the effect; the pin guard needs contact sensing
-beyond vision. Next: target selection with hysteresis, batch CSV.
+beyond vision. Also done: TargetSelector (auto focus) and `--batch` CSV export. Remaining roadmap
+items need the real robot (Phase 7: AprilTag pose + ghost opponents) or the 2027 game (FieldConfig,
+PinRules).
 
 ## Workflow
 
