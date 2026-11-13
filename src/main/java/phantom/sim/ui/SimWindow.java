@@ -99,7 +99,7 @@ public final class SimWindow extends JPanel {
   private ChassisCommand driverCommand() {
     double x = (down(KeyEvent.VK_D) ? 1 : 0) - (down(KeyEvent.VK_A) ? 1 : 0);
     double y = (down(KeyEvent.VK_W) ? 1 : 0) - (down(KeyEvent.VK_S) ? 1 : 0);
-    double turn = (down(KeyEvent.VK_Q) ? 1 : 0) - (down(KeyEvent.VK_E) ? 1 : 0);
+    double turn = (down(KeyEvent.VK_J) ? 1 : 0) - (down(KeyEvent.VK_L) ? 1 : 0); // J = left (CCW), L = right (CW)
     Vec2 dir = new Vec2(x, y).normalized();
     return new ChassisCommand(dir.times(DRIVER_SPEED), turn * DRIVER_TURN);
   }
