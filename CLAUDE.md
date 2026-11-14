@@ -41,7 +41,10 @@ Evader opponent and pushing-match contact model, hold ground + RulesGuard pin ti
 (simulated camera + Kalman filter, search behavior, stall detection). Key findings: holding ground
 is what slows opponents; a realistic camera halves the effect; the pin guard needs contact sensing
 beyond vision. Also done: TargetSelector (auto focus), `--batch` CSV export, human reaction delay
-for Evaders, walls/chokepoints/lanes with gate routing (Line mirror's lead holds with walls). Remaining roadmap
+for Evaders, walls/chokepoints/lanes with gate routing (Line mirror's lead holds with walls),
+IntentPredictor + Cut-off mode (best at chokepoints; prediction helps with a noisy camera). Open
+problem: with a realistic camera near walls, 1-5 pins per 3 min slip through; needs real contact
+sensing. Remaining roadmap
 items need the real robot (Phase 7: AprilTag pose + ghost opponents) or the 2027 game (FieldConfig,
 PinRules).
 

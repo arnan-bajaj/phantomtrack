@@ -238,7 +238,7 @@ public final class FieldRenderer {
             world.pinViolations(),
             assist.backoffsTriggered());
     String line3 =
-        "WASD drive   J/L turn   SPACE = assist   M / 1-4 = mode   H = hold   F = focus   O = opponents   N = sensor   G = field   P = pause   R = reset";
+        "WASD drive   J/L turn   SPACE = assist   M / 1-5 = mode   H = hold   F = focus   O = opponents   N = sensor   G = field   P = pause   R = reset";
 
     g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
     g.setColor(TEXT);

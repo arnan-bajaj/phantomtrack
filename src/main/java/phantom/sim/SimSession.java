@@ -7,6 +7,7 @@ import phantom.core.control.DriverBlend;
 import phantom.core.control.HolonomicController;
 import phantom.core.field.FieldConfig;
 import phantom.core.manager.DefenseAssist;
+import phantom.core.modes.CutoffMode;
 import phantom.core.modes.DefenseTarget;
 import phantom.core.modes.InterposeMode;
 import phantom.core.modes.LineMirrorMode;
@@ -73,7 +74,8 @@ public final class SimSession {
                 ShadowMode.defaults(),
                 InterposeMode.defaults(),
                 ZoneMode.defaults(),
-                LineMirrorMode.defaults()),
+                LineMirrorMode.defaults(),
+                CutoffMode.defaults()),
             HolonomicController.defaults(),
             DriverBlend.defaults(),
             tracker,

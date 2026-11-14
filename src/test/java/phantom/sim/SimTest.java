@@ -92,7 +92,7 @@ class SimTest {
   @Test
   void everyModeRunsWithoutNaN() {
     int modes = SimSession.standard().assist().modes().size();
-    assertEquals(4, modes);
+    assertEquals(5, modes);
     for (int m = 0; m < modes; m++) {
       SimSession s = SimSession.standard();
       s.assist().setModeIndex(m);
@@ -111,6 +111,8 @@ class SimTest {
     assertEquals("Interpose", s.assist().activeMode().name());
     s.assist().setModeIndex(3);
     assertEquals("Line mirror", s.assist().activeMode().name());
+    s.assist().nextMode();
+    assertEquals("Cut-off", s.assist().activeMode().name());
     s.assist().nextMode();
     assertEquals("Shadow", s.assist().activeMode().name());
     s.assist().setModeIndex(99); // ignored
@@ -145,9 +147,10 @@ class SimTest {
     BatchRunner.run(5.0, 1, out); // short runs, 1 seed
     var lines = java.nio.file.Files.readAllLines(out.toPath());
     assertEquals(BatchRunner.HEADER, lines.get(0));
-    // per opponent kind: 1 baseline + 18 setups x 3 sensors x 1 seed = 55 -> 2 kinds = 110 rows
+    // setups: 5 modes x (plain, hold) + 5 no-guard = 15, + 6 auto-focus = 21
+    // per opponent kind: 1 baseline + 21 setups x 3 sensors x 1 seed = 64 -> 2 kinds = 128 rows
     int setups = SimMain.standardSetups().size() - 1 + SimMain.autoFocusSetups().size();
-    assertEquals(18, setups);
+    assertEquals(21, setups);
     assertEquals(1 + 2 * (1 + setups * 3), lines.size());
     int columns = BatchRunner.HEADER.split(",").length;
     for (String line : lines.subList(1, lines.size())) {
