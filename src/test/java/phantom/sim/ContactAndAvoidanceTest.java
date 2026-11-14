@@ -144,6 +144,24 @@ class ContactAndAvoidanceTest {
   }
 
   @Test
+  void worldRemembersWhereRobotsWere() {
+    // Our robot drives +x at a constant 2 m/s (after the accel limit is reached it stays there).
+    var w = twoRobots(new Pose(2, 4, 0), new Pose(14, 7, 0), ChassisCommand.STOP);
+    for (int i = 0; i < 100; i++) { // 2 s
+      w.step(new ChassisCommand(new Vec2(2, 0), 0), 0.02);
+    }
+    double now = w.timeSec();
+    double xNow = w.positionsAt(now).get(100).x();
+    // 0.24 s = 12 steps of 20 ms. At 2 m/s, 0.24 s ago it was 2 * 0.24 = 0.48 m behind
+    double xAgo = w.positionsAt(now - 0.24).get(100).x();
+    assertEquals(0.48, xNow - xAgo, 1e-6);
+    // 0.25 s falls between steps (12.5): we get the snapshot at or before it, 13 steps = 0.52 m
+    assertEquals(0.52, xNow - w.positionsAt(now - 0.25).get(100).x(), 1e-6);
+    // Asking for a time before the 2 s history returns the oldest record, never null
+    assertTrue(w.positionsAt(-100).containsKey(100));
+  }
+
+  @Test
   void evaderDodgesAParkedRobotThatACyclerHits() {
     var field = FieldConfig.placeholder();
     Vec2 pickup = new Vec2(3.0, 4.035);

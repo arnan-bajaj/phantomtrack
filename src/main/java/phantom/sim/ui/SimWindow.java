@@ -26,7 +26,15 @@ public final class SimWindow extends JPanel {
   private Scenarios.OpponentKind kind = Scenarios.OpponentKind.CYCLER;
   private SimSession.Sensor sensor = SimSession.Sensor.PERFECT;
   private long seed = 1;
-  private SimSession session = SimSession.standard(kind, sensor, seed);
+  private SimSession session = withBestDefaults(SimSession.standard(kind, sensor, seed));
+
+  /** Start in the strongest man-to-man setup: Shadow + hold, locked on opponent #0. */
+  private static SimSession withBestDefaults(SimSession s) {
+    s.assist().setModeIndex(0);
+    s.assist().setHoldEnabled(true);
+    s.assist().setFocusOpponentId(0);
+    return s;
+  }
   private boolean paused = false;
 
   public SimWindow() {

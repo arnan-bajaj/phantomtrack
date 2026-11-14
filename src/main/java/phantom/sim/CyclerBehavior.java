@@ -2,6 +2,7 @@ package phantom.sim;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import phantom.core.control.ChassisCommand;
 import phantom.core.geometry.Angles;
 import phantom.core.geometry.Vec2;
@@ -12,7 +13,9 @@ import phantom.core.geometry.Vec2;
  *
  * <ul>
  *   <li><b>Cycler</b> ignores defenders and drives straight through them.
- *   <li><b>Evader</b> steers around robots in its path ({@link Avoidance}). If it is stuck (under
+ *   <li><b>Evader</b> steers around robots in its path ({@link Avoidance}), reacting to where they
+ *       were {@code reactionSec} ago (rounded back to the 20 ms sim step), like a human driver
+ *       (default 0.25 s). If it is stuck (under
  *       0.3 m/s for 1 s) it gives up dodging and pushes straight for 1 s.
  * </ul>
  */
@@ -23,6 +26,10 @@ public final class CyclerBehavior implements OpponentBehavior {
   private final double scoreRadius;
   private final double dwellSeconds;
   private final boolean evasive;
+  private final double reactionSec;
+
+  /** Typical human reaction time to something moving in front of you (s). */
+  public static final double HUMAN_REACTION_SEC = 0.25;
 
   // Evader tuning
   private static final double AVOID_RADIUS = 3.0;
@@ -47,22 +54,36 @@ public final class CyclerBehavior implements OpponentBehavior {
    * @param dwellSeconds time spent at the pickup and at the goal (s)
    */
   public CyclerBehavior(Vec2 pickup, Vec2 goal, double scoreRadius, double dwellSeconds) {
-    this(pickup, goal, scoreRadius, dwellSeconds, false);
+    this(pickup, goal, scoreRadius, dwellSeconds, false, 0.0);
   }
 
   private CyclerBehavior(
-      Vec2 pickup, Vec2 goal, double scoreRadius, double dwellSeconds, boolean evasive) {
+      Vec2 pickup,
+      Vec2 goal,
+      double scoreRadius,
+      double dwellSeconds,
+      boolean evasive,
+      double reactionSec) {
     this.pickup = pickup;
     this.goal = goal;
     this.pickupRadius = 0.3;
     this.scoreRadius = scoreRadius;
     this.dwellSeconds = dwellSeconds;
     this.evasive = evasive;
+    this.reactionSec = reactionSec;
   }
 
-  /** Same cycle, but steers around robots in its path. */
+  /** Same cycle, but steers around robots in its path with a human reaction delay. */
   public static CyclerBehavior evader(Vec2 pickup, Vec2 goal, double scoreRadius, double dwellSeconds) {
-    return new CyclerBehavior(pickup, goal, scoreRadius, dwellSeconds, true);
+    return evader(pickup, goal, scoreRadius, dwellSeconds, HUMAN_REACTION_SEC);
+  }
+
+  /**
+   * @param reactionSec how stale its view of other robots is (s); 0 = superhuman, instant
+   */
+  public static CyclerBehavior evader(
+      Vec2 pickup, Vec2 goal, double scoreRadius, double dwellSeconds, double reactionSec) {
+    return new CyclerBehavior(pickup, goal, scoreRadius, dwellSeconds, true, reactionSec);
   }
 
   @Override
@@ -110,11 +131,11 @@ public final class CyclerBehavior implements OpponentBehavior {
     if (t < bulldozeUntil) {
       return straight;
     }
+    // Other robots as this driver perceives them: where they were reactionSec ago.
     List<Vec2> obstacles = new ArrayList<>();
-    obstacles.add(world.self().position());
-    for (SimWorld.Opponent o : world.opponents()) {
-      if (o.body() != me) {
-        obstacles.add(o.body().position());
+    for (Map.Entry<Integer, Vec2> e : world.positionsAt(t - reactionSec).entrySet()) {
+      if (e.getKey() != me.id()) {
+        obstacles.add(e.getValue());
       }
     }
     return Avoidance.steer(me.position(), dest, obstacles, AVOID_RADIUS, AVOID_GAIN);

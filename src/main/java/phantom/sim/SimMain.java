@@ -235,8 +235,9 @@ public final class SimMain {
           setup.modeIndex() < 0 || Double.isNaN(cycle) || Double.isNaN(base)
               ? "-"
               : String.format("%+.0f%%", 100 * (cycle - base) / base);
-      System.out.printf("%-34s %10.2f s %8s %8d %7.1f s %6d %10d%n",
-          setup.label(), cycle, slowed, total, s.world().selfContactSeconds(),
+      String cycleText = Double.isNaN(cycle) ? "jammed" : String.format("%.2f s", cycle);
+      System.out.printf("%-34s %12s %8s %8d %7.1f s %6d %10d%n",
+          setup.label(), cycleText, slowed, total, s.world().selfContactSeconds(),
           s.world().pinViolations(), s.assist().backoffsTriggered());
     }
     System.out.println("Snapshots: " + dir.getPath() + "/" + kindName + "-*.png");
