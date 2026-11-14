@@ -55,7 +55,12 @@ public final class SimMain {
    * auto (threatSelector picks threat-based selection, otherwise nearest).
    */
   record Setup(String label, int modeIndex, boolean hold, boolean guard, SimSession.Sensor sensor,
-      long seed, int focus, boolean threatSelector) {
+      long seed, int focus, boolean threatSelector, Scenarios.Layout layout) {
+    Setup(String label, int modeIndex, boolean hold, boolean guard, SimSession.Sensor sensor,
+        long seed, int focus, boolean threatSelector) {
+      this(label, modeIndex, hold, guard, sensor, seed, focus, threatSelector, Scenarios.Layout.OPEN);
+    }
+
     Setup(String label, int modeIndex, boolean hold, boolean guard) {
       this(label, modeIndex, hold, guard, SimSession.Sensor.PERFECT, 1L);
     }
@@ -66,7 +71,11 @@ public final class SimMain {
     }
 
     Setup withSensor(SimSession.Sensor s, long newSeed) {
-      return new Setup(label, modeIndex, hold, guard, s, newSeed, focus, threatSelector);
+      return new Setup(label, modeIndex, hold, guard, s, newSeed, focus, threatSelector, layout);
+    }
+
+    Setup withLayout(Scenarios.Layout l) {
+      return new Setup(label, modeIndex, hold, guard, sensor, seed, focus, threatSelector, l);
     }
   }
 
@@ -88,11 +97,11 @@ public final class SimMain {
   /** Builds and runs one setup for the given time. */
   static SimSession run(Setup setup, Scenarios.OpponentKind kind, double seconds, File snapshot)
       throws IOException {
-    FieldConfig field = FieldConfig.placeholder();
+    FieldConfig field = setup.layout().field();
     SimSession s =
         setup.modeIndex() < 0
             ? new SimSession(Scenarios.three(field, kind, Scenarios.parkedOutOfTheWay(field)))
-            : SimSession.standard(kind, setup.sensor(), setup.seed());
+            : SimSession.standard(kind, setup.sensor(), setup.seed(), setup.layout());
     if (setup.modeIndex() >= 0) {
       s.assist().setModeIndex(setup.modeIndex());
       s.assist().setHoldEnabled(setup.hold());
@@ -119,6 +128,53 @@ public final class SimMain {
     runTrackingComparison(seconds);
     System.out.println();
     runAutoFocusComparison(seconds);
+    System.out.println();
+    runLayoutComparison(seconds);
+  }
+
+  /** Does the ranking survive walls? Open field vs one choke vs two lanes. */
+  static void runLayoutComparison(double seconds) throws IOException {
+    System.out.printf("=== Field layouts: %.0f s, perfect tracking, guarded opp slowed (all-opp slowed) ===%n",
+        seconds);
+    List<Setup> setups = List.of(
+        new Setup("Shadow + hold, locked #0", 0, true, true),
+        new Setup("Interpose + hold, locked #0", 1, true, true),
+        new Setup("Zone + hold", 2, true, true),
+        new Setup("Line mirror + hold, locked #0", 3, true, true),
+        new Setup("Line mirror + hold, auto=threat", 3, true, true, SimSession.Sensor.PERFECT, 1, -1, true));
+    StringBuilder head = new StringBuilder(String.format("%-8s %-33s", "Opps", "Setup"));
+    for (Scenarios.Layout l : Scenarios.Layout.values()) {
+      head.append(String.format("%20s", l.field().name()));
+    }
+    System.out.println(head.append(String.format("%7s", "Pins")));
+    for (Scenarios.OpponentKind kind : Scenarios.OpponentKind.values()) {
+      double[] baseCycle = new double[Scenarios.Layout.values().length];
+      int[] baseTotal = new int[baseCycle.length];
+      for (Scenarios.Layout l : Scenarios.Layout.values()) {
+        SimSession b = run(new Setup("none", -1, false, true).withLayout(l), kind, seconds, null);
+        baseCycle[l.ordinal()] = b.world().opponents().get(GUARDED_ID).behavior().averageCycleSeconds();
+        baseTotal[l.ordinal()] = totalCycles(b);
+      }
+      for (Setup setup : setups) {
+        StringBuilder row = new StringBuilder(String.format("%-8s %-33s", kindLabel(kind), setup.label()));
+        int pins = 0;
+        for (Scenarios.Layout l : Scenarios.Layout.values()) {
+          SimSession s = run(setup.withLayout(l), kind, seconds, null);
+          double c = s.world().opponents().get(GUARDED_ID).behavior().averageCycleSeconds();
+          int total = totalCycles(s);
+          String guarded = Double.isNaN(c) ? "jam" : String.format("%+.0f%%", 100 * (c - baseCycle[l.ordinal()]) / baseCycle[l.ordinal()]);
+          String all = String.format("%+.0f%%", 100.0 * (baseTotal[l.ordinal()] - total) / total);
+          row.append(String.format("%20s", guarded + " (" + all + ")"));
+          pins += s.world().pinViolations();
+        }
+        System.out.println(row.append(String.format("%7d", pins)));
+      }
+      System.out.printf("%-8s %-33s", kindLabel(kind), "  baseline cycle time");
+      for (double b : baseCycle) {
+        System.out.printf("%20s", String.format("%.2f s", b));
+      }
+      System.out.println();
+    }
   }
 
   /** Auto focus: nearest-opponent vs threat-based selection with hysteresis. Whole-team effect. */

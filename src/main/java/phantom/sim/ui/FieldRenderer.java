@@ -73,6 +73,19 @@ public final class FieldRenderer {
     g.setStroke(new BasicStroke(1f));
     g.draw(new Line2D.Double(mid1.x(), mid1.y(), mid2.x(), mid2.y()));
 
+    // Walls / field elements and the gates between them
+    g.setColor(new Color(0x5a, 0x60, 0x6b));
+    for (phantom.core.field.Obstacle o : field.obstacles()) {
+      Vec2 a = sx(new Vec2(o.min().x(), o.max().y())); // top-left on screen
+      g.fill(new Rectangle2D.Double(a.x(), a.y(), (o.max().x() - o.min().x()) * scale,
+          (o.max().y() - o.min().y()) * scale));
+    }
+    g.setColor(new Color(0x8a, 0x91, 0x9c, 120));
+    for (Vec2 gate : field.gates()) {
+      Vec2 c = sx(gate);
+      g.draw(new Ellipse2D.Double(c.x() - 4, c.y() - 4, 8, 8));
+    }
+
     drawModeOverlay(g, assist.activeMode(), field);
 
     // Pickups and goal
@@ -200,13 +213,14 @@ public final class FieldRenderer {
             : "#" + assist.focusOpponentId();
     String line1 =
         String.format(
-            "t = %.1f s   |   Mode: %s   |   Assist: %s   |   Focus: %s   |   Opponents: %s   |   Sensor: %s%s",
+            "t = %.1f s   |   Mode: %s   |   Assist: %s   |   Focus: %s   |   Opponents: %s   |   Sensor: %s   |   Field: %s%s",
             world.timeSec(),
             assist.activeMode().name() + (assist.holdEnabled() ? " + hold" : ""),
             assist.lastState(),
             focus,
             world.opponents().isEmpty() ? "-" : world.opponents().get(0).behavior().name(),
             s.sensor().label(),
+            world.field().name(),
             paused ? "   |   PAUSED" : "");
 
     StringBuilder cycles = new StringBuilder("Opponent cycles: ");
@@ -224,7 +238,7 @@ public final class FieldRenderer {
             world.pinViolations(),
             assist.backoffsTriggered());
     String line3 =
-        "WASD drive   J/L turn   SPACE = assist   M / 1-4 = mode   H = hold   F = focus   O = opponents   N = sensor   P = pause   R = reset";
+        "WASD drive   J/L turn   SPACE = assist   M / 1-4 = mode   H = hold   F = focus   O = opponents   N = sensor   G = field   P = pause   R = reset";
 
     g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
     g.setColor(TEXT);

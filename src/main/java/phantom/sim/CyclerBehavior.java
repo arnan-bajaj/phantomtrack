@@ -18,6 +18,12 @@ import phantom.core.geometry.Vec2;
  *       (default 0.25 s). If it is stuck (under
  *       0.3 m/s for 1 s) it gives up dodging and pushes straight for 1 s.
  * </ul>
+ *
+ * <p>With obstacles on the field, both route through a gate when the straight line is blocked.
+ * Gate cost = |p - gate| + |gate - dest| (+ 1.5 m to switch away from the gate already chosen).
+ * An Evader also adds 4 m for every robot it sees (with its reaction delay) within 2 m of a gate,
+ * so it picks the open lane. Any bot stuck at a gate for 1 s (e.g. head-on with another robot)
+ * treats that gate as blocked for 3 s (+10 m) and tries another, like a driver backing out.
  */
 public final class CyclerBehavior implements OpponentBehavior {
   private final Vec2 pickup;
@@ -37,6 +43,15 @@ public final class CyclerBehavior implements OpponentBehavior {
   private static final double STUCK_SPEED = 0.3;
   private static final double STUCK_SECONDS = 1.0;
   private static final double BULLDOZE_SECONDS = 1.0;
+  private static final double SWITCH_PENALTY = 1.5;
+  private static final double CROWDED_RADIUS = 2.0;
+  private static final double CROWDED_PENALTY = 4.0;
+  private static final double BLOCKED_PENALTY = 10.0;
+  private static final double BLOCKED_SECONDS = 3.0;
+  private int committedGate = -1;
+  private int blockedGate = -1;
+  private double blockedUntil = Double.NEGATIVE_INFINITY;
+  private double gateStuckFor = 0.0;
   private double stuckFor = 0.0;
   private double bulldozeUntil = -1.0;
 
@@ -114,12 +129,71 @@ public final class CyclerBehavior implements OpponentBehavior {
     // v = sqrt(2 * a * remaining), using 80% of max accel for margin.
     double remaining = dist - radius;
     double speed = Math.min(me.maxSpeed(), Math.sqrt(2.0 * 0.8 * me.maxAccel() * remaining));
-    Vec2 dir = dest.minus(me.position()).normalized();
+    Vec2 aim = route(t, dt, me, world, dest);
+    Vec2 dir = aim.minus(me.position()).normalized();
     if (evasive) {
-      dir = evade(t, dt, me, world, dest, dir);
+      dir = evade(t, dt, me, world, aim, dir);
     }
     double turn = Angles.difference(dir.angle(), me.heading());
     return new ChassisCommand(dir.times(speed), 4.0 * turn);
+  }
+
+  /** Where to drive right now: straight at dest, or at the best gate if a wall is in the way. */
+  private Vec2 route(double t, double dt, RobotBody me, SimWorld world, Vec2 dest) {
+    var field = world.field();
+    if (field.gates().isEmpty() || !field.pathBlocked(me.position(), dest)) {
+      committedGate = -1;
+      gateStuckFor = 0.0;
+      return dest;
+    }
+    gateStuckFor = me.velocity().norm() < STUCK_SPEED ? gateStuckFor + dt : 0.0;
+    if (gateStuckFor > STUCK_SECONDS && committedGate >= 0) {
+      blockedGate = committedGate;
+      blockedUntil = t + BLOCKED_SECONDS;
+      gateStuckFor = 0.0;
+      stuckFor = 0.0; // try another lane before bulldozing
+    }
+    List<Vec2> seen = new ArrayList<>();
+    if (evasive) {
+      for (Map.Entry<Integer, Vec2> e : world.positionsAt(t - reactionSec).entrySet()) {
+        if (e.getKey() != me.id()) {
+          seen.add(e.getValue());
+        }
+      }
+    }
+    int best = -1;
+    double bestCost = Double.POSITIVE_INFINITY;
+    for (int i = 0; i < field.gates().size(); i++) {
+      double c = gateCost(me.position(), field.gates().get(i), dest, seen, i == committedGate);
+      if (i == blockedGate && t < blockedUntil) {
+        c += BLOCKED_PENALTY;
+      }
+      if (c < bestCost) {
+        bestCost = c;
+        best = i;
+      }
+    }
+    committedGate = best;
+    return field.gates().get(best);
+  }
+
+  /**
+   * Cost of going through a gate (see class comment).
+   *
+   * @param seen robots this driver is watching for (empty for a Cycler)
+   * @param committed true if this is the gate already chosen (no switch penalty)
+   */
+  static double gateCost(Vec2 pos, Vec2 gate, Vec2 dest, List<Vec2> seen, boolean committed) {
+    double cost = pos.distanceTo(gate) + gate.distanceTo(dest);
+    if (!committed) {
+      cost += SWITCH_PENALTY;
+    }
+    for (Vec2 r : seen) {
+      if (r.distanceTo(gate) < CROWDED_RADIUS) {
+        cost += CROWDED_PENALTY;
+      }
+    }
+    return cost;
   }
 
   private Vec2 evade(double t, double dt, RobotBody me, SimWorld world, Vec2 dest, Vec2 straight) {

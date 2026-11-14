@@ -10,6 +10,25 @@ import phantom.core.geometry.Vec2;
 public final class Scenarios {
   private Scenarios() {}
 
+  /** Which field to play on. */
+  public enum Layout {
+    OPEN,
+    CHOKE,
+    TWO_LANES;
+
+    public FieldConfig field() {
+      return switch (this) {
+        case OPEN -> FieldConfig.placeholder();
+        case CHOKE -> FieldConfig.choke();
+        case TWO_LANES -> FieldConfig.twoLanes();
+      };
+    }
+
+    public Layout next() {
+      return values()[(ordinal() + 1) % values().length];
+    }
+  }
+
   /** Which kind of opponent bot to use. */
   public enum OpponentKind {
     /** Drives straight through defenders. */

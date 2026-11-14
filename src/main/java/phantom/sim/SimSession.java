@@ -89,7 +89,12 @@ public final class SimSession {
   }
 
   public static SimSession standard(Scenarios.OpponentKind kind, Sensor sensor, long seed) {
-    return new SimSession(Scenarios.three(FieldConfig.placeholder(), kind), sensor, seed);
+    return standard(kind, sensor, seed, Scenarios.Layout.OPEN);
+  }
+
+  public static SimSession standard(
+      Scenarios.OpponentKind kind, Sensor sensor, long seed, Scenarios.Layout layout) {
+    return new SimSession(Scenarios.three(layout.field(), kind), sensor, seed);
   }
 
   public Sensor sensor() {
