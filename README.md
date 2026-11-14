@@ -35,6 +35,7 @@ terminal.
 | F | cycle focus opponent: auto → #0 → #1 → #2 → auto |
 | O | switch opponent type (Cycler ↔ Evader) and restart |
 | N | switch sensor: Perfect → Realistic → Bad camera, and restart |
+| G | switch field: Open → Choke (one gap) → Two lanes, and restart |
 | M | next defense mode |
 | H | toggle **hold ground** (stop retreating on contact, push back) |
 | 1 / 2 / 3 / 4 | Shadow / Interpose / Zone / Line mirror |
@@ -75,7 +76,8 @@ someone else will reach the goal at least 2 s sooner, for 0.5 s straight.
 src/main/java/phantom/
   core/            Robot-ready code. ZERO dependencies (no WPILib, no AWT), so it drops into robot code later.
     geometry/      Vec2, Pose, Angles, Intercept (earliest-catch-time math)
-    field/         FieldConfig: field size, goal, pickups (placeholder until 2027 kickoff)
+    field/         FieldConfig: field size, goal, pickups, obstacles + gates (placeholder until 2027 kickoff)
+                   Obstacle: wall rectangle (collision, push-out, path-blocked checks)
     tracking/      TrackedRobot, OpponentTracker  <- the ONLY way defense code sees opponents
                    Measurement, MeasurementSource, AxisKalman, KalmanOpponentTracker (noisy sightings -> tracks)
     modes/         DefenseMode interface + Shadow, Interpose, Zone, LineMirror modes
@@ -109,6 +111,7 @@ over NetworkTables, then vision. Nothing in `core/modes` or `core/control` chang
 - [x] Hold-ground behavior + pin timer (RulesGuard) with sideways back-off
 - [x] Phase 5: target selection (stay on scorer until it turns away), search when nothing is visible
 - [x] Phase 6: batch runs with CSV metrics (`--batch`)
+- [x] Human reaction delay for Evaders; walls, chokepoints and lanes; gate routing for both sides
 - [ ] Phase 7: real robot (AprilTag pose) with simulated ghost opponents
 - [ ] Phase 8: vision-based opponent tracking
 
@@ -177,6 +180,30 @@ What this says:
 - Totals move by about ±1 cycle (≈ ±1.5%) between runs, so treat small gaps as ties.
 - Oddity: plain Shadow does better with a noisy camera (+20%) than with perfect tracking (+2%).
   Tracking lag makes it drift into the opponent's path, which accidentally acts like hold.
+
+### With walls (made-up layouts: one 2.5 m choke, or two 2 m lanes, 4 m in front of the goal)
+
+Guarded opponent slowed, perfect tracking. Opponents route through gaps; Evaders pick a lane
+without a defender near it. Baselines get slower with walls (Evaders: 7.15 s open, 8.5 s choke,
+8.3 s two lanes), so these percentages are on top of that.
+
+| Opponents | Setup | Open | Choke | Two lanes |
+| --- | --- | --- | --- | --- |
+| Cyclers | Shadow + hold | +24% | +15% | +22% |
+| Cyclers | **Line mirror + hold** | +36% | **+44%** | **+41%** |
+| Cyclers | Interpose + hold | +5% | +5% | +38% |
+| Evaders | Shadow + hold | +32% | +16% | +21% |
+| Evaders | **Line mirror + hold** | +43% | **+44%** | **+48%** |
+| Evaders | Line mirror + hold, auto = threat | +7% | +17% | +44% |
+
+- **Line mirror's lead survives walls and grows.** Its line sits just behind the gaps, so it
+  covers every exit. Even with two lanes to choose from, Evaders can't get around it.
+- **Shadow gets worse with walls** (+32% → +16–21% vs Evaders). Following an opponent through
+  a narrow gap means arriving late at the exit.
+- **Interpose finally works in two lanes** (+38% vs Cyclers), standing in the lane the opponent
+  is committed to.
+- With walls, 1 pin slipped through in 3 of 30 runs: the back-off sometimes points into a wall.
+  A first attempt to fix that made things worse, so it's still open.
 
 - Evaders react to a 0.25 s old view of other robots (human reaction time). With instant,
   superhuman reactions the Evader numbers were about 10–15 points lower.

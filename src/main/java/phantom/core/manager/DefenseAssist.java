@@ -110,12 +110,12 @@ public final class DefenseAssist {
     }
     if (lastTarget.isEmpty()) {
       lastState = State.SEARCHING;
-      ChassisCommand search = controller.calculate(self, searchTarget(nowSec));
+      ChassisCommand search = controller.calculate(self, routeAroundObstacles(self, searchTarget(nowSec)));
       return blend.blend(driver, search, true, controller.maxSpeed());
     }
     boolean backing = guard != null && (guard.backingOff() || guard.blindBackingOff(nowSec));
     lastState = backing ? State.BACKING_OFF : State.ENGAGED;
-    ChassisCommand assist = controller.calculate(self, lastTarget.get());
+    ChassisCommand assist = controller.calculate(self, routeAroundObstacles(self, lastTarget.get()));
     return blend.blend(driver, assist, true, controller.maxSpeed());
   }
 
@@ -142,6 +142,31 @@ public final class DefenseAssist {
   public static final double HOME_DISTANCE = 2.5; // m
   public static final double SCAN_AMPLITUDE = 0.6; // rad (about 34 deg each way)
   public static final double SCAN_RATE = 0.8; // rad/s
+
+  /**
+   * If a wall is between us and the target, go via the best gate instead.
+   *
+   * <pre>
+   *   if path(self -> target) is blocked:
+   *     gate* = argmin over gates of |self - g| + |g - target|
+   *     drive to gate* (no feedforward), keep the target's heading
+   * </pre>
+   */
+  public DefenseTarget routeAroundObstacles(Pose self, DefenseTarget target) {
+    if (field.gates().isEmpty() || !field.pathBlocked(self.position(), target.position())) {
+      return target;
+    }
+    Vec2 best = null;
+    double bestCost = Double.POSITIVE_INFINITY;
+    for (Vec2 g : field.gates()) {
+      double c = self.position().distanceTo(g) + g.distanceTo(target.position());
+      if (c < bestCost) {
+        bestCost = c;
+        best = g;
+      }
+    }
+    return new DefenseTarget(best, target.heading(), Vec2.ZERO, target.opponentId());
+  }
 
   public DefenseMode activeMode() {
     return modes.get(modeIndex);
