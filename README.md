@@ -41,6 +41,8 @@ terminal.
 | P | pause |
 | R | reset |
 
+The window starts in **Shadow + hold, locked on opponent #0**, the strongest man-to-man setup.
+
 Pressing a drive key while holding SPACE is a **driver override**: you get full control back. The
 HUD shows the assist state (OFF / ENGAGED / DRIVER_OVERRIDE / SEARCHING / BACKING_OFF). With a
 noisy sensor, dashed outlines show where the robot *thinks* opponents are.
@@ -83,7 +85,8 @@ src/main/java/phantom/
                    TargetSelector: who to guard when focus is auto
   sim/             Simulator only. Never used on the robot.
     RobotBody      kinematic swerve with speed/accel limits
-    CyclerBehavior opponent bot: pickup -> goal -> repeat (Cycler pushes through, Evader dodges)
+    CyclerBehavior opponent bot: pickup -> goal -> repeat (Cycler pushes through, Evader dodges,
+                   reacting to where robots were 0.25 s ago like a human driver)
     Avoidance      Evader's steering around robots in its path
     Contact        pushing-match model: whoever drives harder into the other wins
     SimWorld       ground truth + collisions
@@ -120,14 +123,14 @@ contact time while we are driving into that opponent, one per episode that reach
 
 | Setup | vs Cyclers (push through) | vs Evaders (dodge) | Pins (C / E) |
 | --- | --- | --- | --- |
-| Shadow | +2% | +7% | 0 / 0 |
-| **Shadow + hold** | **+24%** | **+23%** | **0 / 0** |
-| Interpose + hold | +5% | +6% | 0 / 0 |
+| Shadow | +2% | +23% | 0 / 0 |
+| **Shadow + hold** | **+24%** | **+32%** | **0 / 0** |
+| Interpose + hold | +5% | +7% | 0 / 0 |
 | Zone + hold | +4% | +1% | 0 / 0 |
-| Line mirror | +35% | +26% | 0 / 0 |
-| **Line mirror + hold** | **+36%** | **+28%** | **0 / 0** |
-| Shadow + hold, no pin guard | +28% | +126% | 9 / 3 |
-| Line mirror + hold, no pin guard | +50% | +27% | 17 / 0 |
+| Line mirror | +35% | +42% | 0 / 0 |
+| **Line mirror + hold** | **+36%** | **+43%** | **0 / 0** |
+| Shadow + hold, no pin guard | +28% | jammed all match | 9 / 1 |
+| Line mirror + hold, no pin guard | +50% | +50% | 17 / 4 |
 
 ### With a simulated camera (averaged over 5 seeds)
 
@@ -139,8 +142,8 @@ pipeline is measured.
 | --- | --- | --- | --- | --- |
 | Cyclers | Shadow + hold | +24% | +14% | +10% |
 | Cyclers | Line mirror + hold | +36% | +29% | +12% |
-| Evaders | Shadow + hold | +23% | +12% | +10% |
-| Evaders | Line mirror + hold | +28% | +15% | +9% |
+| Evaders | Shadow + hold | +32% | +13% | +10% |
+| Evaders | Line mirror + hold | +43% | +19% | +12% |
 
 Pins with a camera: 0 to 0.8 per 180 s. Position estimate error: about 0.4 m (Realistic), 0.9 m (Bad).
 Time each opponent is tracked: 50–73% (Realistic), 31–41% (Bad).
@@ -163,10 +166,10 @@ What this says:
 | Setup | vs Cyclers | vs Evaders |
 | --- | --- | --- |
 | Shadow + hold, locked on one scorer | **+9%** | +10% |
-| Shadow + hold, auto = nearest | +4% | +10% |
-| Shadow + hold, auto = threat | +7% | +5% |
+| Shadow + hold, auto = nearest | +4% | +8% |
+| Shadow + hold, auto = threat | +7% | +7% |
 | Line mirror + hold, locked on one scorer | +6% | +11% |
-| Line mirror + hold, auto = nearest | +10% | +13% |
+| Line mirror + hold, auto = nearest | +10% | +16% |
 | Line mirror + hold, auto = threat | **+15%** | +13% |
 
 - **Man-to-man (Shadow): pick one scorer and stay on them.** Switching costs more than it gains.
@@ -175,5 +178,7 @@ What this says:
 - Oddity: plain Shadow does better with a noisy camera (+20%) than with perfect tracking (+2%).
   Tracking lag makes it drift into the opponent's path, which accidentally acts like hold.
 
+- Evaders react to a 0.25 s old view of other robots (human reaction time). With instant,
+  superhuman reactions the Evader numbers were about 10–15 points lower.
 - Limits: one defender, three opponents with fixed routes, no game pieces, idealized pushing,
   opponent identity assumed known. Treat rankings as direction, not guarantees.

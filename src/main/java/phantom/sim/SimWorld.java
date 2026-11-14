@@ -32,11 +32,46 @@ public final class SimWorld {
   private final Set<Integer> violationCounted = new HashSet<>();
   private int pinViolations = 0;
 
+  // Recent positions of every robot, so simulated drivers can react to a delayed view.
+  private record Snapshot(double time, Map<Integer, Vec2> positions) {}
+
+  private static final double HISTORY_SEC = 2.0;
+  private final java.util.ArrayDeque<Snapshot> history = new java.util.ArrayDeque<>();
+
   public SimWorld(FieldConfig field, RobotBody self, List<Opponent> opponents) {
     this.field = field;
     this.self = self;
     this.opponents = new ArrayList<>(opponents);
     this.refereePins = new PinTimer(PinRules.placeholder(), field.robotHalfSize());
+    recordHistory();
+  }
+
+  private void recordHistory() {
+    Map<Integer, Vec2> now = new HashMap<>();
+    now.put(self.id(), self.position());
+    for (Opponent o : opponents) {
+      now.put(o.body().id(), o.body().position());
+    }
+    history.addLast(new Snapshot(timeSec, now));
+    while (history.size() > 1 && history.peekFirst().time() < timeSec - HISTORY_SEC) {
+      history.removeFirst();
+    }
+  }
+
+  /**
+   * Every robot's position (keyed by id, including ours) at the latest recorded time at or before
+   * {@code t}; the oldest record if {@code t} is earlier than the history.
+   */
+  public Map<Integer, Vec2> positionsAt(double t) {
+    Snapshot best = history.peekFirst();
+    for (Snapshot s : history) {
+      if (s.time() <= t + 1e-9) {
+        best = s;
+      } else {
+        break;
+      }
+    }
+    return best.positions();
   }
 
   /** Advance the world by dt seconds with our robot following selfCmd. */
@@ -60,6 +95,7 @@ public final class SimWorld {
       selfContactSeconds += dt;
     }
     timeSec += dt;
+    recordHistory();
     countPins();
   }
 
