@@ -83,7 +83,7 @@ public final class SimMain {
   static List<Setup> standardSetups() {
     List<Setup> setups = new ArrayList<>();
     setups.add(new Setup("No defense", -1, false, true));
-    String[] names = {"Shadow", "Interpose", "Zone", "Line mirror"};
+    String[] names = {"Shadow", "Interpose", "Zone", "Line mirror", "Cut-off"};
     for (int m = 0; m < names.length; m++) {
       setups.add(new Setup(names[m], m, false, true));
       setups.add(new Setup(names[m] + " + hold", m, true, true));
@@ -141,7 +141,8 @@ public final class SimMain {
         new Setup("Interpose + hold, locked #0", 1, true, true),
         new Setup("Zone + hold", 2, true, true),
         new Setup("Line mirror + hold, locked #0", 3, true, true),
-        new Setup("Line mirror + hold, auto=threat", 3, true, true, SimSession.Sensor.PERFECT, 1, -1, true));
+        new Setup("Line mirror + hold, auto=threat", 3, true, true, SimSession.Sensor.PERFECT, 1, -1, true),
+        new Setup("Cut-off + hold, locked #0", 4, true, true));
     StringBuilder head = new StringBuilder(String.format("%-8s %-33s", "Opps", "Setup"));
     for (Scenarios.Layout l : Scenarios.Layout.values()) {
       head.append(String.format("%20s", l.field().name()));

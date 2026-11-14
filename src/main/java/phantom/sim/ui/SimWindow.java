@@ -71,6 +71,7 @@ public final class SimWindow extends JPanel {
               case KeyEvent.VK_2 -> session.assist().setModeIndex(1);
               case KeyEvent.VK_3 -> session.assist().setModeIndex(2);
               case KeyEvent.VK_4 -> session.assist().setModeIndex(3);
+              case KeyEvent.VK_5 -> session.assist().setModeIndex(4);
               default -> {}
             }
           }

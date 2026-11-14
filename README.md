@@ -38,7 +38,7 @@ terminal.
 | G | switch field: Open → Choke (one gap) → Two lanes, and restart |
 | M | next defense mode |
 | H | toggle **hold ground** (stop retreating on contact, push back) |
-| 1 / 2 / 3 / 4 | Shadow / Interpose / Zone / Line mirror |
+| 1 / 2 / 3 / 4 / 5 | Shadow / Interpose / Zone / Line mirror / Cut-off |
 | P | pause |
 | R | reset |
 
@@ -56,6 +56,7 @@ noisy sensor, dashed outlines show where the robot *thinks* opponents are.
 | 2 | Interpose | Stands halfway along the opponent's path to the goal, taking the lane early instead of retreating. | yes |
 | 3 | Zone | Waits near the goal (green circle). Meets whoever enters the zone, using intercept math, then returns. | no, picks its own threat |
 | 4 | Line mirror | Stays on a fixed line in front of the goal (green line) and slides to match the opponent. | yes |
+| 5 | Cut-off | Predicts the opponent's route (destination + which gap) and waits at the first point on it we can reach before they do. | yes |
 
 The formula for each mode is in its class comment in `src/main/java/phantom/core/modes/`.
 
@@ -80,7 +81,8 @@ src/main/java/phantom/
                    Obstacle: wall rectangle (collision, push-out, path-blocked checks)
     tracking/      TrackedRobot, OpponentTracker  <- the ONLY way defense code sees opponents
                    Measurement, MeasurementSource, AxisKalman, KalmanOpponentTracker (noisy sightings -> tracks)
-    modes/         DefenseMode interface + Shadow, Interpose, Zone, LineMirror modes
+    modes/         DefenseMode interface + Shadow, Interpose, Zone, LineMirror, Cutoff modes
+    prediction/    IntentPredictor: opponent destination + route (game knowledge, no ML)
     control/       HolonomicController (target -> velocity), DriverBlend (driver override), RulesGuard (pin limit)
     rules/         PinRules (game-manual numbers), PinTimer (contact time per opponent)
     manager/       DefenseAssist: tracker -> mode -> controller -> blend, once per 20 ms loop
@@ -112,10 +114,37 @@ over NetworkTables, then vision. Nothing in `core/modes` or `core/control` chang
 - [x] Phase 5: target selection (stay on scorer until it turns away), search when nothing is visible
 - [x] Phase 6: batch runs with CSV metrics (`--batch`)
 - [x] Human reaction delay for Evaders; walls, chokepoints and lanes; gate routing for both sides
+- [x] Route prediction (IntentPredictor) and Cut-off mode
 - [ ] Phase 7: real robot (AprilTag pose) with simulated ghost opponents
 - [ ] Phase 8: vision-based opponent tracking
 
 ## Current findings
+
+### Which mode when (best legal setup per situation, guarded opponent slowed, 180 s)
+
+| Situation | Perfect tracking | Realistic camera |
+| --- | --- | --- |
+| Open field, opponent pushes through | **Cut-off + hold** (+47%) | **Cut-off + hold** (+31%) ≈ Line mirror + hold (+29%) |
+| Open field, opponent dodges | **Line mirror + hold** (+43%) | **Line mirror + hold** (+19%) |
+| One chokepoint, pushes through | **Line mirror + hold** (+44%) | **Cut-off + hold** (+47%) |
+| One chokepoint, dodges | **Cut-off + hold** (+71%) | **Line mirror + hold** (+50%) ≈ Cut-off + hold (+47%) |
+| Two lanes, either kind | **Line mirror + hold** (+41% / +48%) | not measured |
+| Slow the whole alliance | Line mirror + hold, auto = threat (+13–26%) | not measured |
+
+- **Line mirror + hold is the safe default.** It's never far from the best anywhere.
+- **Cut-off is a specialist.** It predicts where the opponent will be and waits there. That's
+  excellent at gaps and against robots that drive straight, but a dodger in open field sees it
+  waiting and goes around (+13%). A version that switched to shadowing at close range was worse
+  everywhere and was dropped.
+- **Prediction helps with a noisy camera.** Cut-off depends on the route, not exact position, so
+  it keeps more of its effect than Shadow (+31% vs +14% against bulldozers with a realistic camera).
+- **WARNING, pins with a camera near walls:** with the realistic camera at the chokepoint, every
+  mode lets through 1–5 pins per 3 minutes (0–1 in open field). The pin guard relies on camera
+  estimates plus stall detection, and that's not enough near walls. **Real contact sensing on the
+  robot is required before using hold in a match.**
+
+
+### Details
 
 Headless 180 s runs (`./gradlew run --args="--headless"`). Man-to-man modes guard opponent #0;
 Zone picks its own threat. "No defense" parks our robot in a corner. **Slowed** = how much the
