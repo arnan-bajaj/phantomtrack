@@ -38,7 +38,7 @@ public final class BatchRunner {
           + "false_track_s_per_min,fresh_false_track_s_per_min,coverage_opp0,coverage_opp1,"
           + "coverage_opp2,coverage_mean,partner_as_opp_s_per_min,"
           + "fresh_partner_as_opp_s_per_min,partner_contact_s,redesignations_per_min,handoffs,"
-          + "eliminations";
+          + "eliminations,aim_nothing_s_per_min,aim_partner_s_per_min";
 
   public static void run(double seconds, int seeds, File out) throws IOException {
     File dir = out.getAbsoluteFile().getParentFile();
@@ -187,7 +187,9 @@ public final class BatchRunner {
         fmt(s.world().selfPartnerContactSeconds()),
         s.multiTracker() == null ? "" : fmt(perMinute(s.redesignations(), seconds)),
         s.multiTracker() == null ? "" : String.valueOf(s.multiTracker().handoffs()),
-        s.multiTracker() == null ? "" : String.valueOf(s.multiTracker().eliminations()));
+        s.multiTracker() == null ? "" : String.valueOf(s.multiTracker().eliminations()),
+        fmt(perMinute(s.metrics().guardingNothingSeconds(), seconds)),
+        fmt(perMinute(s.metrics().guardingPartnerSeconds(), seconds)));
   }
 
   private static double perMinute(double count, double seconds) {

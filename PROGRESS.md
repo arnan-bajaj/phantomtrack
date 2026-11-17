@@ -5,7 +5,7 @@ Goal: drop the assumption that every sighting comes with the right opponent id
 (`Measurement.id`). Results and the list of what still differs from a real camera are in
 [`docs/findings/anonymous-tracking.md`](docs/findings/anonymous-tracking.md).
 
-Last verified: `./gradlew test` = **174 pass** (115 old + 59 new). `./gradlew run
+Last verified: `./gradlew test` = **176 pass** (115 old + 61 new). `./gradlew run
 --args="--headless"`: all old sections byte-identical to main; three new anonymous-tracking
 sections at the end.
 
@@ -25,6 +25,8 @@ sections at the end.
 | Findings + honest list of differences | `docs/findings/anonymous-tracking.md` | — |
 
 Extras beyond the brief:
+- Persistent (repeating) false positives as an experiment.
+- "Assist aimed at no robot / a partner" metrics.
 - "Known-ID + occlusion" tracking to separate occlusion from anonymity.
 - A simulated driver for "locked on #0" without ids, with re-points per minute.
 - Camera-coverage and coverage-breakdown sweeps.
@@ -35,8 +37,10 @@ Extras beyond the brief:
 1. **Pin timers are keyed by track id** (`RulesGuard` / `PinTimer`). Pins were not worse with
    anonymous tracking in the sim, but an id change during contact does restart that opponent's
    timer. Worth a unit test and maybe a by-position fallback.
-2. **Persistent false positives** (the same spot every frame) are the realistic worst case and are
-   not simulated. Add a "fixed clutter points" option and re-run the comparison.
+2. **Persistent false positives** are simulated as an option (`withPersistentFalsePositives`,
+   off in the presets) and measured in `--tracker-sweep`: they become phantom opponents and hurt
+   auto focus. A mitigation (masking known field elements, or a "never moves, nothing there"
+   rule) is not built yet.
 3. **Multiple real cameras** need fusing before this tracker (one robot seen by two cameras gives
    two detections in one frame).
 4. Measure the real pipeline (detection rate vs distance, color error, false positives per

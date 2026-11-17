@@ -36,7 +36,11 @@ that camera and adds a multi-target tracker that works without ids. Results:
    partner-colored labels flip it.
 6. **Occlusion alone is cheap.** Hiding robots behind robots costs about 6 points of coverage
    (66% → 60%) and no measurable defense effect.
-7. **Pins don't get worse with anonymous tracking** (1.9 ± 0.3 vs 1.7 ± 0.3 per run pooled,
+7. **Repeating false positives are the real danger.** With 3 fixed phantom spots, the
+   auto-focus assist reacts to something that isn't a robot 18% of the time (vs 6%), and coverage
+   drops. Confirmation (3 of 5) filters random clutter, not repeating clutter. A lock chosen by
+   the driver is mostly immune.
+8. **Pins don't get worse with anonymous tracking** (1.9 ± 0.3 vs 1.7 ± 0.3 per run pooled,
    Realistic). At the choke every camera tracker lets about 1–6 pins per run through (perfect
    tracking: 0–1). That is the open contact-sensing problem the README already describes, not
    something anonymity adds.
@@ -138,14 +142,14 @@ a lucky spot (the README already notes this for plain Shadow).
 
 ### Tracking quality (pooled: both setups, both opponent kinds, open + choke = 40 runs per row)
 
-| Camera | Tracking | Position RMSE | ID switches / min | False tracks, s/min (fresh) | Opponent coverage | Partner as opponent, s/min (fresh) | Driver re-points / min (Cut-off locked) |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Realistic | Known-ID | 0.41 m | 3.4 | 6.6 (0.0) | 66% | 0.7 (0.1) | 0 (ids are given) |
-| Realistic | Known-ID + occlusion | 0.45 m | 3.9 | 7.3 (0.0) | 60% | 1.0 (0.1) | 0 (ids are given) |
-| Realistic | **Anonymous** | 0.50 m | 33.0 | 13.4 (1.6) | 55% | 2.9 (1.6) | 9.1 |
-| Bad | Known-ID | 0.74 m | 10.3 | 9.0 (0.2) | 36% | 2.3 (0.6) | 0 (ids are given) |
-| Bad | Known-ID + occlusion | 0.76 m | 10.8 | 8.9 (0.3) | 32% | 2.4 (0.6) | 0 (ids are given) |
-| Bad | **Anonymous** | 0.82 m | 30.2 | 25.9 (5.0) | 18% | 5.9 (2.9) | 5.5 |
+| Camera | Tracking | Position RMSE | ID switches / min | False tracks, s/min (fresh) | Opponent coverage | Partner as opponent, s/min (fresh) | Assist aimed at no robot / a partner, s/min | Driver re-points / min (Cut-off locked) |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Realistic | Known-ID | 0.41 m | 3.4 | 6.6 (0.0) | 66% | 0.7 (0.1) | 2.1 / 0.2 | 0 (ids are given) |
+| Realistic | Known-ID + occlusion | 0.45 m | 3.9 | 7.3 (0.0) | 60% | 1.0 (0.1) | 2.3 / 0.3 | 0 (ids are given) |
+| Realistic | **Anonymous** | 0.50 m | 33.0 | 13.4 (1.6) | 55% | 2.9 (1.6) | 4.1 / 1.1 | 9.1 |
+| Bad | Known-ID | 0.74 m | 10.3 | 9.0 (0.2) | 36% | 2.3 (0.6) | 4.1 / 1.0 | 0 (ids are given) |
+| Bad | Known-ID + occlusion | 0.76 m | 10.8 | 8.9 (0.3) | 32% | 2.4 (0.6) | 4.4 / 1.1 | 0 (ids are given) |
+| Bad | **Anonymous** | 0.82 m | 30.2 | 25.9 (5.0) | 18% | 5.9 (2.9) | 13.3 / 2.8 | 5.5 |
 
 - **Known-ID "ID switches" are not identity errors.** They come from coasting tracks: for up to
   1 s after its last sighting a track keeps moving at its last velocity, drifts off its robot
@@ -156,6 +160,11 @@ a lucky spot (the README already notes this for plain Shadow).
   rarely lands in the same spot 3 frames out of 5, so it seldom becomes a confirmed track on its
   own (an estimate, not measured separately). Real clutter is not like that (see the list at the
   end).
+- **What the assist actually acted on.** "Aimed at no robot / a partner" counts the time the
+  engaged assist reacted to a track that was on no robot (stale or phantom) or on one of our
+  partners. With the Realistic camera that is 4.1 + 1.1 s per minute anonymous vs 2.1 + 0.2
+  known-ID, i.e. about 9% of the time instead of 4%. With the Bad camera it is 13.3 + 2.8 s
+  (27%).
 - Bad's re-point rate is *lower* only because the target is tracked so rarely that there is
   often nothing to point at.
 
@@ -251,6 +260,34 @@ With the Bad camera the loss splits roughly into thirds:
 - **the rest**: my guess is a feedback effect. When the auto focus switches more, our robot turns
   more, and the 70° camera looks somewhere else. I have not proven this.
 
+### Persistent false positives (the realistic worst case, `--tracker-sweep`)
+
+The presets use independent, uniform clutter. Real false positives repeat: a field element or a
+reflection the detector keeps calling a robot. This experiment puts a few fixed spots on the
+field (random places, each with its own apparent color), each detected in 30% of the frames it
+is in view. Realistic camera, anonymous tracking, both opponent kinds, open + choke (20 runs per
+row):
+
+| Setup | Spots | Slowed | ID sw/min | Fresh false tracks s/min | Assist aimed at no robot s/min | Coverage | Re-points/min |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Line mirror + hold, auto=threat | 0 | +15% ± 2 | 32.7 | 1.9 | 3.8 | 55% | – |
+| Line mirror + hold, auto=threat | 3 | +12% ± 1 | 32.7 | 13.9 | 10.6 | 49% | – |
+| Line mirror + hold, auto=threat | 6 | +14% ± 2 | 34.2 | 37.7 | 17.1 | 45% | – |
+| Cut-off + hold, locked #0 | 0 | +23% ± 1 | 33.4 | 1.4 | 4.5 | 55% | 9.1 |
+| Cut-off + hold, locked #0 | 3 | +25% ± 2 | 35.7 | 5.6 | 5.7 | 54% | 9.5 |
+| Cut-off + hold, locked #0 | 6 | +22% ± 2 | 39.7 | 21.1 | 7.4 | 54% | 10.4 |
+
+- **M-of-N does not stop them.** A spot that shows up 30% of the time gets confirmed and becomes
+  a phantom opponent. That was expected: confirmation only filters *random* clutter.
+- **Auto focus suffers most.** With 3 spots the assist reacts to a phantom or stale track
+  10.6 s per minute (18% of the time, vs 6%). Coverage of the real opponents also drops
+  (55% → 49% → 45%). My guess, not verified: the robot turns toward phantoms and its camera looks
+  away from the real opponents. The slowed % stays within noise (+15% → +12% → +14%).
+- **A driver-chosen lock is mostly immune**: the assist only follows the robot the driver
+  pointed at.
+- On the real robot, **mask known field elements** and look at what the detector reports when
+  no robot is around, before trusting auto focus.
+
 ### Partners on the field (all trackers)
 
 Our robot touches its own partners 3 s per 180 s run in open field and **20 s per run at the
@@ -261,10 +298,11 @@ the same range as the README's 1–5 without partners.
 
 ## What still differs from a real camera
 
-1. **False positives are friendlier than real ones.** Ours are independent and uniform. Real ones
-   repeat in the same place (field elements, reflections, people at the field edge, game pieces),
-   which is exactly what beats M-of-N confirmation. A persistent false positive would become a
-   confirmed phantom robot.
+1. **False positives are friendlier than real ones.** The presets use independent, uniform
+   clutter. Real false positives repeat in the same place (field elements, reflections, people at
+   the field edge, game pieces), which is what beats M-of-N confirmation. The persistent-spot
+   experiment above shows the effect, but the spots are random points with a made-up rate. Real
+   ones sit on specific field elements and depend on the detector.
 2. **Color errors are independent per frame here.** Real ones are correlated: a robot with
    unusual bumpers, glare, or a dark corner is misread frame after frame. The log-odds belief
    assumes independence and would be confidently wrong.
@@ -300,7 +338,8 @@ the same range as the README's 1–5 without partners.
 ```bash
 ./gradlew run --args="--headless"              # includes the anonymous tables (last 3 sections)
 ./gradlew run --args="--anonymous 180 5"       # only those tables
-./gradlew run --args="--tracker-sweep 180 5"   # re-acquisition, confirmation, 360 deg, breakdown
+./gradlew run --args="--tracker-sweep 180 5"   # re-acquisition, confirmation, 360 deg, breakdown,
+                                               # persistent false positives
 ./gradlew run --args="--batch 180 5"           # results/batch.csv, one row per run, all metrics
 ```
 
@@ -318,5 +357,7 @@ Hungarian on distance with a 1.5 m limit matches the rest.
 - **Partner-as-opponent time**: track-seconds matched to a partner.
 - **"Fresh"**: the track's last sighting is at most 0.3 s old.
 - **Coverage**: the fraction of time an opponent has a reported track on it.
+- **Aimed at no robot / a partner**: seconds the engaged assist's target track was on no robot /
+  on one of our partners.
 - **Re-points**: times per minute the simulated driver re-points a locked assist (not the first
   designation).

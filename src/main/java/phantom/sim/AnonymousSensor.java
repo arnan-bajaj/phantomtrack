@@ -35,6 +35,11 @@ import phantom.core.tracking.MeasurementSource;
  *                 The pipeline then drops EVERY detection closer than robotHalfSize to our own
  *                 center: nothing else can be inside our bumpers. A noisy self-detection that
  *                 lands outside that radius leaks through, like it would on a real robot.
+ *  - persistent false positives (optional, off in the presets): persistentSpots fixed points,
+ *                 placed at random on the field when the sensor is made, each with its own fixed
+ *                 apparent color. While a spot is in view and not hidden behind a robot it is
+ *                 "detected" with probability persistentRate per frame, like a field element or a
+ *                 reflection the detector keeps mistaking for a robot.
  *  - the detections of one frame are shuffled: their order says nothing about identity.
  * </pre>
  *
@@ -49,6 +54,8 @@ public final class AnonymousSensor implements DetectionSource {
    * @param clutterOpponentShare chance that a false detection is labelled OPPONENT (0..1)
    * @param selfDetectionRate chance per frame that our own bumpers are detected (0..1)
    * @param occlusion true = robots hidden behind other robots are not seen
+   * @param persistentSpots number of fixed false-positive spots (0 = none)
+   * @param persistentRate chance per frame that a spot in view is detected (0..1)
    */
   public record Config(
       NoisySensor.Config camera,
@@ -56,15 +63,25 @@ public final class AnonymousSensor implements DetectionSource {
       double clutterPerFrame,
       double clutterOpponentShare,
       double selfDetectionRate,
-      boolean occlusion) {
+      boolean occlusion,
+      int persistentSpots,
+      double persistentRate) {
 
     public Config {
       if (!(colorErrorRate >= 0 && colorErrorRate <= 1)
           || !(clutterPerFrame >= 0 && Double.isFinite(clutterPerFrame))
           || !(clutterOpponentShare >= 0 && clutterOpponentShare <= 1)
-          || !(selfDetectionRate >= 0 && selfDetectionRate <= 1)) {
+          || !(selfDetectionRate >= 0 && selfDetectionRate <= 1)
+          || persistentSpots < 0 || !(persistentRate >= 0 && persistentRate <= 1)) {
         throw new IllegalArgumentException("invalid AnonymousSensor.Config");
       }
+    }
+
+    /** No persistent false positives. */
+    public Config(NoisySensor.Config camera, double colorErrorRate, double clutterPerFrame,
+        double clutterOpponentShare, double selfDetectionRate, boolean occlusion) {
+      this(camera, colorErrorRate, clutterPerFrame, clutterOpponentShare, selfDetectionRate,
+          occlusion, 0, 0.0);
     }
 
     /**
@@ -92,22 +109,28 @@ public final class AnonymousSensor implements DetectionSource {
 
     public Config withOcclusion(boolean on) {
       return new Config(camera, colorErrorRate, clutterPerFrame, clutterOpponentShare,
-          selfDetectionRate, on);
+          selfDetectionRate, on, persistentSpots, persistentRate);
     }
 
     public Config withColorError(double rate) {
       return new Config(camera, rate, clutterPerFrame, clutterOpponentShare, selfDetectionRate,
-          occlusion);
+          occlusion, persistentSpots, persistentRate);
     }
 
     public Config withClutter(double perFrame, double opponentShare) {
       return new Config(camera, colorErrorRate, perFrame, opponentShare, selfDetectionRate,
-          occlusion);
+          occlusion, persistentSpots, persistentRate);
     }
 
     public Config withSelfDetectionRate(double rate) {
       return new Config(camera, colorErrorRate, clutterPerFrame, clutterOpponentShare, rate,
-          occlusion);
+          occlusion, persistentSpots, persistentRate);
+    }
+
+    /** Fixed false-positive spots (see the class comment). */
+    public Config withPersistentFalsePositives(int spots, double ratePerFrame) {
+      return new Config(camera, colorErrorRate, clutterPerFrame, clutterOpponentShare,
+          selfDetectionRate, occlusion, spots, ratePerFrame);
     }
   }
 
@@ -122,6 +145,12 @@ public final class AnonymousSensor implements DetectionSource {
   /** Source of a detection of our own bumpers. */
   public static final int SELF = -2;
 
+  /** Source of a persistent false positive. */
+  public static final int PHANTOM = -3;
+
+  /** Persistent false-positive spots never sit closer than this to a field wall (m). */
+  public static final double SPOT_MARGIN = 0.5;
+
   private final SimWorld world;
   private final Config config;
   private final Random random;
@@ -135,11 +164,26 @@ public final class AnonymousSensor implements DetectionSource {
   private int clutterDetections = 0;
   private int selfDetections = 0;
   private int removedNearSelf = 0;
+  private int phantomDetections = 0;
+  private final List<Vec2> spots = new ArrayList<>();
+  private final List<AllianceLabel> spotColors = new ArrayList<>();
 
   public AnonymousSensor(SimWorld world, Config config, long seed) {
     this.world = world;
     this.config = config;
     this.random = new Random(seed);
+    FieldConfig field = world.field();
+    for (int i = 0; i < config.persistentSpots(); i++) {
+      double x = SPOT_MARGIN + random.nextDouble() * (field.length() - 2 * SPOT_MARGIN);
+      double y = SPOT_MARGIN + random.nextDouble() * (field.width() - 2 * SPOT_MARGIN);
+      spots.add(new Vec2(x, y));
+      spotColors.add(random.nextBoolean() ? AllianceLabel.OPPONENT : AllianceLabel.PARTNER);
+    }
+  }
+
+  /** Where the persistent false positives are (empty unless configured). */
+  public List<Vec2> persistentSpots() {
+    return List.copyOf(spots);
   }
 
   public Config config() {
@@ -271,6 +315,30 @@ public final class AnonymousSensor implements DetectionSource {
       clutterDetections++;
     }
 
+    // Persistent false positives: same spot every time, seen like a robot would be.
+    for (int i = 0; i < spots.size(); i++) {
+      Vec2 spot = spots.get(i);
+      Vec2 rel = spot.minus(eye);
+      if (rel.norm() > cam.rangeM()
+          || Math.abs(Angles.difference(rel.angle(), self.heading())) > halfFov) {
+        continue;
+      }
+      if (config.occlusion()) {
+        List<Vec2> blockers = new ArrayList<>();
+        for (Robot r : robots) {
+          blockers.add(r.position());
+        }
+        if (occluded(eye, spot, blockers, field.robotHalfSize())) {
+          continue;
+        }
+      }
+      if (random.nextDouble() < config.persistentRate()) {
+        dets.add(new Tagged(
+            new Detection(addNoise(spot, cam.noiseStd()), label(spotColors.get(i))), PHANTOM));
+        phantomDetections++;
+      }
+    }
+
     // Our own robot: nothing real can be inside our bumpers.
     List<Tagged> kept = new ArrayList<>();
     for (Tagged d : dets) {
@@ -381,5 +449,10 @@ public final class AnonymousSensor implements DetectionSource {
   /** Detections dropped because they were inside our own bumpers. */
   public int removedNearSelf() {
     return removedNearSelf;
+  }
+
+  /** Detections of persistent false-positive spots produced so far. */
+  public int phantomDetections() {
+    return phantomDetections;
   }
 }

@@ -177,6 +177,49 @@ class AnonymousSensorTest {
     assertTrue(reported < 500 * 5 / 2, "most clutter should be outside the field: " + reported);
   }
 
+  @Test
+  void persistentFalsePositivesRepeatInTheSamePlace() {
+    // 5 spots, detected every frame (rate 1), no noise, 360 deg view with 50 m range so all are in
+    // view, nobody to hide them: every frame has the same 5 positions with the same colors.
+    var field = FieldConfig.placeholder();
+    var w = world(field, new Pose(8, 4, 0), List.of(), List.of());
+    var cam = new NoisySensor.Config("test", 0.0, 0.0, 0.0, 360, 50.0, 50);
+    var cfg = new AnonymousSensor.Config(cam, 0.0, 0.0, 0.5, 0.0, true)
+        .withPersistentFalsePositives(5, 1.0);
+    var s = new AnonymousSensor(w, cfg, 4);
+    List<Vec2> spots = s.persistentSpots();
+    assertEquals(5, spots.size());
+    for (Vec2 p : spots) { // placed inside the field, at least 0.5 m from the walls
+      assertTrue(p.x() >= 0.5 && p.x() <= field.length() - 0.5, p.toString());
+      assertTrue(p.y() >= 0.5 && p.y() <= field.width() - 0.5, p.toString());
+    }
+    List<Detection> first = s.poll(0.0).get(0).detections();
+    assertEquals(5, first.size());
+    for (int i = 1; i < 50; i++) {
+      List<Detection> next = s.poll(i * 0.02).get(0).detections();
+      assertEquals(5, next.size());
+      for (Detection d : next) { // same place, same color as in the first frame
+        assertEquals(at(first, d.position().x(), d.position().y()).label(), d.label());
+      }
+    }
+    assertEquals(250, s.phantomDetections());
+    // the same seed puts the spots in the same places
+    assertEquals(spots, new AnonymousSensor(w, cfg, 4).persistentSpots());
+  }
+
+  @Test
+  void persistentFalsePositivesFireAtTheirRate() {
+    // one spot, 30% per frame, 2000 frames in view: about 600 detections (sd = sqrt(2000*.3*.7) = 20)
+    var w = world(FieldConfig.placeholder(), new Pose(8, 4, 0), List.of(), List.of());
+    var cam = new NoisySensor.Config("test", 0.0, 0.0, 0.0, 360, 50.0, 50);
+    var s = new AnonymousSensor(w, new AnonymousSensor.Config(cam, 0.0, 0.0, 0.5, 0.0, true)
+        .withPersistentFalsePositives(1, 0.3), 8);
+    for (int i = 0; i < 2000; i++) {
+      s.poll(i * 0.02);
+    }
+    assertEquals(600, s.phantomDetections(), 80);
+  }
+
   // ---------------- timing ----------------
 
   @Test

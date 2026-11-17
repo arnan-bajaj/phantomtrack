@@ -57,6 +57,8 @@ public final class SimMain {
       runCameraCoverageSweep(sweepSeconds, sweepSeeds);
       System.out.println();
       runCoverageBreakdown(sweepSeconds, sweepSeeds);
+      System.out.println();
+      runPersistentFalsePositives(sweepSeconds, sweepSeeds);
       return;
     }
     boolean headless = args.length > 0 && args[0].equals("--headless");
@@ -192,9 +194,9 @@ public final class SimMain {
 
   /** Averages of one comparison row over its seeds. NaN inputs (e.g. a jammed cycle) are skipped. */
   static final class RowStats {
-    final double[] sum = new double[14];
-    final double[] sumSq = new double[14];
-    final int[] n = new int[14];
+    final double[] sum = new double[16];
+    final double[] sumSq = new double[16];
+    final int[] n = new int[16];
     int runs = 0;
 
     static final int SLOWED = 0;
@@ -210,6 +212,8 @@ public final class SimMain {
     static final int PARTNER_CONTACT_S = 10;
     static final int FRESH_FALSE_S_PER_MIN = 11;
     static final int FRESH_PARTNER_S_PER_MIN = 12;
+    static final int AIM_NOTHING_S_PER_MIN = 13;
+    static final int AIM_PARTNER_S_PER_MIN = 14;
 
     void add(int k, double v) {
       if (!Double.isNaN(v)) {
@@ -250,6 +254,8 @@ public final class SimMain {
       add(FALSE_S_PER_MIN, m.falseTrackSeconds() / minutes);
       add(FRESH_FALSE_S_PER_MIN, m.freshFalseTrackSeconds() / minutes);
       add(FRESH_PARTNER_S_PER_MIN, m.freshPartnerAsOpponentSeconds() / minutes);
+      add(AIM_NOTHING_S_PER_MIN, m.guardingNothingSeconds() / minutes);
+      add(AIM_PARTNER_S_PER_MIN, m.guardingPartnerSeconds() / minutes);
       add(COVERED, m.meanCoverage());
       add(PARTNER_S_PER_MIN, m.partnerAsOpponentSeconds() / minutes);
       if (s.tracking() == SimSession.Tracking.ANONYMOUS) {
@@ -303,14 +309,19 @@ public final class SimMain {
     System.out.printf("=== Anonymous tracking, defense: %.0f s, 2 alliance partners on the field,"
         + " camera rows averaged over %d seeds ===%n", seconds, seeds);
     System.out.println("Slowed = guarded opponent #0 +- standard error over seeds (all opponents'"
-        + " cycles). PtnrCt = s/run our robot touched a partner. Repnt/m = times/min the driver"
+        + " cycles). PtnrCt = s/run our robot touched a partner. Aim none/ptnr = s/min the assist"
+        + " reacted to a track on no robot / on a partner. Repnt/m = times/min the driver"
         + " re-points the locked assist.");
-    System.out.printf("%-7s %-6s %-31s %-9s %-9s %16s %7s %5s %7s %7s%n", "Opps", "Field",
-        "Setup", "Sensor", "Tracking", "Slowed", "(all)", "Pins", "PtnrCt", "Repnt/m");
-    forEachAnonymousRow(rows, (label, st) -> System.out.printf("%s %16s %7s %5s %7s %7s%n",
+    System.out.printf("%-7s %-6s %-31s %-9s %-9s %16s %7s %5s %7s %14s %7s%n", "Opps", "Field",
+        "Setup", "Sensor", "Tracking", "Slowed", "(all)", "Pins", "PtnrCt", "Aim none/ptnr",
+        "Repnt/m");
+    forEachAnonymousRow(rows, (label, st) -> System.out.printf("%s %16s %7s %5s %7s %14s %7s%n",
         label, pct(st.mean(RowStats.SLOWED)) + " +-" + num(st.stderr(RowStats.SLOWED), 0),
         pct(st.mean(RowStats.ALL_SLOWED)), num(st.mean(RowStats.PINS), 1),
-        num(st.mean(RowStats.PARTNER_CONTACT_S), 1), num(st.mean(RowStats.REPOINTS_PER_MIN), 1)));
+        num(st.mean(RowStats.PARTNER_CONTACT_S), 1),
+        num(st.mean(RowStats.AIM_NOTHING_S_PER_MIN), 1) + " / "
+            + num(st.mean(RowStats.AIM_PARTNER_S_PER_MIN), 1),
+        num(st.mean(RowStats.REPOINTS_PER_MIN), 1)));
     System.out.println();
 
     System.out.printf("=== Anonymous tracking, tracking quality (same runs) ===%n");
@@ -558,6 +569,34 @@ public final class SimMain {
         System.out.printf("%-9s %-58s %6s %5s %13s%n", camera.label(), labels.get(i),
             pctPlain(st.mean(RowStats.COVERED)), num(st.mean(RowStats.RMSE), 2),
             pct(st.mean(RowStats.ALL_SLOWED)) + " +-" + num(st.stderr(RowStats.ALL_SLOWED), 1));
+      }
+    }
+  }
+
+  /**
+   * The realistic worst case for confirmation: false positives that repeat in the same place
+   * (Realistic camera otherwise unchanged, anonymous tracking).
+   */
+  static void runPersistentFalsePositives(double seconds, int seeds) throws IOException {
+    System.out.printf("=== Persistent false positives (fixed spots, each detected 30%% of frames"
+        + " while in view), Realistic camera, anonymous: %.0f s, %d seeds x 2 opponent kinds x 2"
+        + " fields, partners on ===%n", seconds, seeds);
+    System.out.printf("%-31s %-6s %13s %9s %11s %12s %8s %9s%n", "Setup", "Spots", "Slowed",
+        "IDsw/min", "FreshFalse", "AimNone/min", "Cover", "Repnt/m");
+    for (Setup setup : anonymousSetups()) {
+      for (int spots : new int[] {0, 3, 6}) {
+        AnonymousSensor.Config cam =
+            AnonymousSensor.Config.realistic().withPersistentFalsePositives(spots, 0.3);
+        RowStats st = pooled(setup, new SimSession.Sensor[] {SimSession.Sensor.REALISTIC},
+            seconds, seeds, (w, label, seed) -> SimSession.withCamera(w, label, cam, seed,
+                SimSession.Tracking.ANONYMOUS, c -> c));
+        int slowed = setup.focus() >= 0 ? RowStats.SLOWED : RowStats.ALL_SLOWED;
+        System.out.printf("%-31s %-6d %13s %9s %11s %12s %8s %9s%n", setup.label(), spots,
+            pct(st.mean(slowed)) + " +-" + num(st.stderr(slowed), 1),
+            num(st.mean(RowStats.ID_SWITCHES_PER_MIN), 1),
+            num(st.mean(RowStats.FRESH_FALSE_S_PER_MIN), 1),
+            num(st.mean(RowStats.AIM_NOTHING_S_PER_MIN), 1), pctPlain(st.mean(RowStats.COVERED)),
+            setup.focus() >= 0 ? num(st.mean(RowStats.REPOINTS_PER_MIN), 1) : "-");
       }
     }
   }

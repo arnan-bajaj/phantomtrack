@@ -488,6 +488,9 @@ public final class SimSession {
     private double freshPartnerAsOpponentSeconds = 0.0;
     private int[] previousTrackOfTruth = new int[0];
     private final Map<Integer, Vec2> truthOfTrack = new HashMap<>();
+    private final Map<Integer, Boolean> trackOnPartner = new HashMap<>();
+    private double guardingNothingSeconds = 0.0;
+    private double guardingPartnerSeconds = 0.0;
 
     private double engagedSeconds = 0.0;
     private double guardingSeconds = 0.0; // engaged AND reacting to a specific opponent
@@ -530,6 +533,12 @@ public final class SimSession {
         return; // e.g. Zone waiting at its anchor: nobody to be goal-side of
       }
       guardingSeconds += DT;
+      Boolean onPartner = trackOnPartner.get(target.get().opponentId());
+      if (onPartner == null) {
+        guardingNothingSeconds += DT; // the target's track is on no robot (stale or phantom)
+      } else if (onPartner) {
+        guardingPartnerSeconds += DT; // the target's track is really one of our partners
+      }
       var goal = s.world.field().defendedGoal();
       if (s.tracking == Tracking.ANONYMOUS) {
         Vec2 onRobot = truthOfTrack.get(target.get().opponentId()); // the robot that track is on
@@ -564,6 +573,7 @@ public final class SimSession {
       }
       java.util.Arrays.fill(trackOnOpponent, -1);
       truthOfTrack.clear();
+      trackOnPartner.clear();
       List<Vec2> truth = new java.util.ArrayList<>();
       for (TrackedRobot r : opps) {
         truth.add(r.position());
@@ -589,6 +599,7 @@ public final class SimSession {
         }
         previousTrackOfTruth[j] = id;
         truthOfTrack.put(id, truth.get(j));
+        trackOnPartner.put(id, j >= nOpp);
         if (j >= nOpp) {
           partnerAsOpponentSeconds += DT;
           freshPartnerAsOpponentSeconds += fresh ? DT : 0.0;
@@ -656,6 +667,19 @@ public final class SimSession {
     /** Part of {@link #partnerAsOpponentSeconds()} from fresh tracks. */
     public double freshPartnerAsOpponentSeconds() {
       return freshPartnerAsOpponentSeconds;
+    }
+
+    /**
+     * Seconds the engaged assist was reacting to a track that was on no robot (a stale track that
+     * drifted off, or a phantom).
+     */
+    public double guardingNothingSeconds() {
+      return guardingNothingSeconds;
+    }
+
+    /** Seconds the engaged assist was reacting to a track that was really one of our partners. */
+    public double guardingPartnerSeconds() {
+      return guardingPartnerSeconds;
     }
 
     /** Simulated seconds scored so far. */
