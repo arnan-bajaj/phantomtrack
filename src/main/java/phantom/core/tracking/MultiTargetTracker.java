@@ -55,11 +55,14 @@ import phantom.core.geometry.Vec2;
  *     A track gets a new id when it is created and keeps it for as long as it is reported.
  *     When a reported id loses its track (timed out, or its color belief flipped to "partner"),
  *     the last state is kept as a GHOST until handoffWindowSec after that state's time.
- *     When a track becomes reported, it takes over the id of the nearest ghost that passes:
- *       dt       = t_track - t_ghost
- *       expected = p_ghost + v_ghost * min(dt, handoffLeadSec)
- *       |p_track - expected| <= handoffRadius         (proximity)
- *       |v_track - v_ghost|  <= handoffSpeedDiff      (velocity)
+ *     When a track becomes reported, it takes over the id of the closest "old" track that passes
+ *     the gates below. Old tracks are the ghosts AND the reported tracks that are COASTING right
+ *     now (the new track is usually confirmed before the old one has coasted to its timeout).
+ *       dt       = t_new - t_old                       in [0, handoffWindowSec]
+ *       expected = p_old + v_old * min(dt, handoffLeadSec)
+ *       |p_new - expected| <= handoffRadius            (proximity)
+ *       |v_new - v_old|    <= handoffSpeedDiff         (velocity)
+ *     A coasting track whose id is taken over is deleted: it was a stale copy of the same robot.
  *     So when the guarded robot's track dies and a new one is born in the same place, the id (and
  *     with it the focus lock and the pin timer in RulesGuard) carries over.
  * </pre>
@@ -164,14 +167,20 @@ public final class MultiTargetTracker implements OpponentTracker {
     /**
      * Default tuning. Motion model and timeout match {@link KalmanOpponentTracker#defaults}
      * (accel 4 m/s^2, drop after 1 s). 3-of-5 confirmation. Re-acquisition: within 2 s of the
-     * last sighting, inside 1.5 m of where the lost track would be after at most 0.5 s more
-     * of its last velocity, no velocity gate. The re-acquisition numbers are UNMEASURED GUESSES:
-     * they still have to be chosen from sim runs (see PROGRESS.md).
+     * last sighting, inside 1.5 m of where the lost track would be after at most 0.5 s more of
+     * its last velocity, velocities within 3 m/s. The re-acquisition numbers are NOT MEASURED
+     * YET: they still have to be chosen from sim runs (see PROGRESS.md).
      */
     public static Config defaults(double measurementStd, double colorErrorRate) {
       return new Config(
-          measurementStd, 4.0, 1.0, 3, 5, colorErrorRate, 0.5, 2.0, 1.5,
-          Double.POSITIVE_INFINITY, 0.5, 0.5, 1);
+          measurementStd, 4.0, 1.0, 3, 5, colorErrorRate, 0.5, 2.0, 1.5, 3.0, 0.5, 0.5, 1);
+    }
+
+    /** Same settings, track ids counting up from {@code id}. */
+    public Config withFirstTrackId(int id) {
+      return new Config(measurementStd, accelStd, coastTimeoutSec, confirmHits, confirmWindow,
+          colorErrorRate, priorOpponent, handoffWindowSec, handoffRadius, handoffSpeedDiff,
+          handoffLeadSec, confidenceSigma, id);
     }
 
     public Config withConfirmation(int hits, int window) {
@@ -446,38 +455,79 @@ public final class MultiTargetTracker implements OpponentTracker {
     }
   }
 
-  /** Give newly reportable tracks the ids of nearby ghosts, closest pairs first. */
+  /**
+   * Give newly reportable tracks the ids of nearby lost (ghost) or coasting reported tracks,
+   * closest pairs first. A coasting track whose id is taken over is deleted.
+   */
   private void handOff(List<Track> newlyReportable) {
-    if (ghosts.isEmpty() || newlyReportable.isEmpty()) {
+    if (config.handoffWindowSec() <= 0.0 || newlyReportable.isEmpty()) {
       return;
     }
-    record Candidate(Track track, Ghost ghost, double positionError) {}
+    record Candidate(Track track, Ghost ghost, Track coasting, double error) {}
     List<Candidate> candidates = new ArrayList<>();
     for (Track tr : newlyReportable) {
       for (Ghost g : ghosts) {
-        double dt = tr.time - g.time();
-        if (dt < 0.0 || dt > config.handoffWindowSec()) {
-          continue;
+        double e = handoffError(tr.position(), tr.velocity(), tr.time, g.position(), g.velocity(),
+            g.time(), config);
+        if (Double.isFinite(e)) {
+          candidates.add(new Candidate(tr, g, null, e));
         }
-        double positionError = handoffPositionError(tr.position(), g.position(), g.velocity(), dt,
-            config.handoffLeadSec());
-        double speedDiff = tr.velocity().minus(g.velocity()).norm();
-        if (positionError <= config.handoffRadius() && speedDiff <= config.handoffSpeedDiff()) {
-          candidates.add(new Candidate(tr, g, positionError));
+      }
+      for (Track old : tracks) {
+        if (old.reported && old.stage == Stage.COASTING) {
+          double e = handoffError(tr.position(), tr.velocity(), tr.time, old.position(),
+              old.velocity(), old.time, config);
+          if (Double.isFinite(e)) {
+            candidates.add(new Candidate(tr, null, old, e));
+          }
         }
       }
     }
-    candidates.sort(Comparator.comparingDouble(Candidate::positionError));
+    candidates.sort(Comparator.comparingDouble(Candidate::error));
     List<Track> done = new ArrayList<>();
+    List<Track> merged = new ArrayList<>();
     for (Candidate c : candidates) {
-      if (done.contains(c.track()) || !ghosts.contains(c.ghost())) {
+      if (done.contains(c.track())
+          || (c.ghost() != null && !ghosts.contains(c.ghost()))
+          || (c.coasting() != null && merged.contains(c.coasting()))) {
         continue;
       }
-      c.track().id = c.ghost().id();
-      ghosts.remove(c.ghost());
+      if (c.ghost() != null) {
+        c.track().id = c.ghost().id();
+        ghosts.remove(c.ghost());
+      } else {
+        c.track().id = c.coasting().id;
+        merged.add(c.coasting());
+      }
       done.add(c.track());
       handoffs++;
     }
+    tracks.removeAll(merged);
+  }
+
+  /**
+   * Re-acquisition test for one (new track, old track) pair. Returns the position error if the
+   * pair passes every gate, otherwise +infinity:
+   *
+   * <pre>
+   *   dt       = tNew - tOld                          must be in [0, handoffWindowSec]
+   *   expected = pOld + vOld * min(dt, handoffLeadSec)
+   *   error    = |pNew - expected|                    must be <= handoffRadius     (proximity)
+   *   |vNew - vOld|                                   must be <= handoffSpeedDiff  (velocity)
+   * </pre>
+   */
+  public static double handoffError(
+      Vec2 pNew, Vec2 vNew, double tNew, Vec2 pOld, Vec2 vOld, double tOld, Config c) {
+    double dt = tNew - tOld;
+    if (!(dt >= 0.0) || dt > c.handoffWindowSec()) {
+      return Double.POSITIVE_INFINITY;
+    }
+    double error = handoffPositionError(pNew, pOld, vOld, dt, c.handoffLeadSec());
+    double speedDiff = vNew.minus(vOld).norm();
+    if (!(error <= c.handoffRadius()) || !(speedDiff <= c.handoffSpeedDiff())) {
+      return Double.POSITIVE_INFINITY;
+    }
+    return error;
   }
 
   /**
