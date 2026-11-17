@@ -13,17 +13,18 @@ import phantom.core.geometry.Vec2;
  * the way in and to every command on the way out:
  *
  * <pre>
- *   ROTATED  (field turned 180 degrees about its center; 2022 and 2024-2026 fields)
+ *   ROTATED  (field turned 180 degrees about its center, e.g. 2022, 2025)
  *     x' = L - x     y' = W - y     heading' = wrap(heading + pi)
  *     vx' = -vx      vy' = -vy      omega' = omega
  *
- *   MIRRORED (field reflected across the center line x = L / 2; the 2023 field)
+ *   MIRRORED (field reflected across the center line x = L / 2, e.g. 2023, 2024)
  *     x' = L - x     y' = y         heading' = wrap(pi - heading)
  *     vx' = -vx      vy' = vy       omega' = -omega
  * </pre>
  *
  * Both maps undo themselves (apply twice = no change), so the same method converts in both
- * directions. L and W must be the size of the field the drivetrain's pose estimator uses.
+ * directions. L and W must be the size of the field the drivetrain's pose estimator uses. Which
+ * symmetry applies changes from year to year: check the game manual's field drawings.
  *
  * @param fieldLength L, along x (m)
  * @param fieldWidth W, along y (m)
