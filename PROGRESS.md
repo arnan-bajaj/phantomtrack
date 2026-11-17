@@ -13,15 +13,26 @@ opponents shown in AdvantageScope. Safe enough for a first test on carpet.
   and a ghost can never move it. 9 hand-computed tests in `RealSelfTest`. Headless metrics are
   byte-identical to `main`.
 
+- **`robot/` project** (GradleRIO 2026.2.1, matches `~/wpilib/2026`): compiles `phantom/core/**`
+  plus the AWT-free ghost classes listed in `robot/shared-sources.txt` straight from
+  `../src/main/java`. `RobotSharedSourcesTest` (main project) keeps that list robot-safe.
+- **WPILib-free robot logic** in `robot/.../frc/robot/defense/` (compiles; partly tested):
+  `Geofence`, `CommandLimits` (speed cap, accel limit, NaN -> STOP), `PoseMonitor`
+  (stale / jump / heading jump / frozen / NaN), `SafetyGate` (teleop-only, deadman, latched pose
+  fault, override, test area), `FieldMirror` (red alliance), `VirtualContact` (ghosts push back via
+  the sim's `Contact` model), `GhostSession`, `PhantomTrack` (the per-loop pipeline).
+- Tests so far: `GeofenceTest`, `CommandLimitsTest` (18 robot tests).
+
 ## Next
 
-1. `robot/` GradleRIO 2026.2.1 project that compiles `phantom/core/**` (plus the AWT-free ghost
-   classes from `phantom/sim`) straight from `../src/main/java`.
-2. WPILib-free safety layer + tests: deadman, override, speed cap, accel limit, geofence, pose
-   health, teleop-only.
-3. Alliance mirroring, `DefenseDrive` boundary, kinematic sim drivetrain, Xbox bindings, telemetry.
-4. Desktop sim run, AdvantageScope layout, `robot/README.md`, `docs/phase7-test-plan.md`, PR.
+1. Tests: PoseMonitor, SafetyGate, FieldMirror (hand-computed red values), VirtualContact,
+   PhantomTrack pipeline (deadman, override, autonomous, pose jump), no-WPILib-in-`defense` rule.
+2. WPILib layer: `DefenseDrive`, kinematic sim drivetrain, alliance adapter, Xbox bindings,
+   rumble, NetworkTables telemetry, dashboard choosers.
+3. Desktop sim run, AdvantageScope layout, `robot/README.md`, `docs/phase7-test-plan.md`, PR.
 
 ## Open questions
 
-- none yet
+- The geofence brakes along sqrt(2 a d) in 20 ms steps, so the last step can cross the fence
+  line by up to 0.4 mm before stopping (derived in `GeofenceTest`). Harmless inside a 0.75 m
+  margin; noted so nobody is surprised.

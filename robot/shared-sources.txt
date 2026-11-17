@@ -1,0 +1,18 @@
+# Source files this robot project compiles straight from ../src/main/java (never copied).
+# One Ant-style pattern per line. Read by build.gradle AND by the main project's
+# RobotSharedSourcesTest, which fails if anything listed here pulls in AWT, Swing or the sim UI.
+
+# The whole robot-ready library.
+phantom/core/**
+
+# Ghost opponents: the simulator's own opponent bots, pushing model and world. These files have
+# no AWT/Swing imports. Do not add SimMain, SimSession, BatchRunner, NoisySensor or anything in
+# phantom/sim/ui.
+phantom/sim/OpponentBehavior.java
+phantom/sim/CyclerBehavior.java
+phantom/sim/Avoidance.java
+phantom/sim/Contact.java
+phantom/sim/RobotBody.java
+phantom/sim/SimWorld.java
+phantom/sim/PerfectTracker.java
+phantom/sim/Scenarios.java

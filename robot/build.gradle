@@ -1,0 +1,143 @@
+plugins {
+    id "java"
+    id "edu.wpi.first.GradleRIO" version "2026.2.1"
+}
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+def ROBOT_MAIN_CLASS = "frc.robot.Main"
+
+// ---------------------------------------------------------------------------------------------
+// PhantomTrack: compile phantom.core (and the AWT-free ghost opponent classes) straight from the
+// simulator project one folder up. Nothing is copied, so there is exactly one version of the
+// defense code. The list of what is shared lives in shared-sources.txt.
+// ---------------------------------------------------------------------------------------------
+def sharedPatterns = file('shared-sources.txt').readLines()
+        .collect { it.trim() }
+        .findAll { !it.isEmpty() && !it.startsWith('#') }
+
+sourceSets {
+    main {
+        java {
+            srcDir '../src/main/java'
+            // Include filters apply to every source folder of this source set, so the robot's own
+            // code has to be listed too.
+            include 'frc/**'
+            sharedPatterns.each { include it }
+        }
+    }
+    test {
+        java {
+            // One small helper shared with the simulator project's tests (source scanning for the
+            // "no WPILib in frc.robot.defense" rule).
+            srcDir '../src/test/java'
+            include 'frc/**'
+            include 'phantom/SourceScan.java'
+        }
+    }
+}
+
+// Define my targets (RoboRIO) and artifacts (deployable files)
+// This is added by GradleRIO's backing project DeployUtils.
+deploy {
+    targets {
+        roborio(getTargetTypeClass('RoboRIO')) {
+            // Team number is loaded from .wpilib/wpilib_preferences.json (VS Code: "WPILib: Set
+            // Team Number") or from the command line. It is not set in this repo, so building and
+            // simulating fall back to 0. Deploying needs the real number.
+            team = project.frc.getTeamOrDefault(0)
+            debug = project.frc.getDebugOrDefault(false)
+
+            artifacts {
+                // First part is artifact name, 2nd is artifact type
+                // getTargetTypeClass is a shortcut to get the class type using a string
+
+                frcJava(getArtifactTypeClass('FRCJavaArtifact')) {
+                }
+
+                // Static files artifact
+                frcStaticFileDeploy(getArtifactTypeClass('FileTreeArtifact')) {
+                    files = project.fileTree('src/main/deploy')
+                    directory = '/home/lvuser/deploy'
+                    deleteOldFiles = false // Change to true to delete files on roboRIO that no
+                                           // longer exist in deploy directory of this project
+                }
+            }
+        }
+    }
+}
+
+def deployArtifact = deploy.targets.roborio.artifacts.frcJava
+
+// Set to true to use debug for all targets including JNI, which will drastically impact
+// performance.
+wpi.java.debugJni = false
+
+// Defining my dependencies. In this case, WPILib (+ friends), and vendor libraries.
+// Also defines JUnit 5. PhantomTrack adds NO dependencies of its own.
+dependencies {
+    annotationProcessor wpi.java.deps.wpilibAnnotations()
+    implementation wpi.java.deps.wpilib()
+    implementation wpi.java.vendor.java()
+
+    roborioDebug wpi.java.deps.wpilibJniDebug(wpi.platforms.roborio)
+    roborioDebug wpi.java.vendor.jniDebug(wpi.platforms.roborio)
+
+    roborioRelease wpi.java.deps.wpilibJniRelease(wpi.platforms.roborio)
+    roborioRelease wpi.java.vendor.jniRelease(wpi.platforms.roborio)
+
+    nativeDebug wpi.java.deps.wpilibJniDebug(wpi.platforms.desktop)
+    nativeDebug wpi.java.vendor.jniDebug(wpi.platforms.desktop)
+    simulationDebug wpi.sim.enableDebug()
+
+    nativeRelease wpi.java.deps.wpilibJniRelease(wpi.platforms.desktop)
+    nativeRelease wpi.java.vendor.jniRelease(wpi.platforms.desktop)
+    simulationRelease wpi.sim.enableRelease()
+
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.10.1'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+test {
+    useJUnitPlatform()
+    systemProperty 'junit.jupiter.extensions.autodetection.enabled', 'true'
+    testLogging {
+        events 'passed', 'failed', 'skipped'
+        exceptionFormat 'full'
+    }
+}
+
+// Simulation configuration (e.g. environment variables).
+//   ./gradlew simulateJava                     sim GUI + keyboard/joystick (normal use)
+//   ./gradlew simulateJava -PsimHeadless       no GUI, WebSocket server on port 3300 so a script
+//                                              can act as the Driver Station (tools/sim_drive_check.py)
+def simHeadless = project.hasProperty('simHeadless')
+wpi.sim.addGui().defaultEnabled = !simHeadless
+wpi.sim.addDriverstation()
+wpi.sim.addWebsocketsServer().defaultEnabled = simHeadless
+
+// Setting up my Jar File. In this case, adding all libraries into the main jar ('fat jar')
+// in order to make them all available at runtime. Also adding the manifest so WPILib
+// knows where to look for our Robot Class.
+jar {
+    from { configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) } }
+    from('src') { into 'backup/src' }
+    from('vendordeps') { into 'backup/vendordeps' }
+    from('build.gradle') { into 'backup' }
+    manifest edu.wpi.first.gradlerio.GradleRIOPlugin.javaManifest(ROBOT_MAIN_CLASS)
+    duplicatesStrategy = DuplicatesStrategy.INCLUDE
+}
+
+// Configure jar and deploy tasks
+deployArtifact.jarTask = jar
+wpi.java.configureExecutableTasks(jar)
+wpi.java.configureTestTasks(test)
+
+// Configure string concat to always inline compile
+tasks.withType(JavaCompile) {
+    options.compilerArgs.add '-XDstringConcat=inline'
+    options.encoding = 'UTF-8'
+}
