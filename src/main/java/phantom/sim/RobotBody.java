@@ -20,8 +20,11 @@ public final class RobotBody {
   private Vec2 position;
   private Vec2 velocity = Vec2.ZERO;
   private Vec2 desiredVelocity = Vec2.ZERO; // last command, used by the pushing model
+  private Vec2 velocityBeforeStep = Vec2.ZERO; // for the acceleration over the last step
+  private Vec2 acceleration = Vec2.ZERO;
   private double heading;
   private double omega = 0.0;
+  private double desiredOmega = 0.0;
 
   /**
    * @param maxSpeed m/s
@@ -50,17 +53,33 @@ public final class RobotBody {
     // Translation: move velocity toward the command, at most maxAccel * dt per step.
     Vec2 desired = cmd.velocity().clampNorm(maxSpeed);
     desiredVelocity = desired;
+    velocityBeforeStep = velocity;
     Vec2 dv = desired.minus(velocity).clampNorm(maxAccel * dt);
     velocity = velocity.plus(dv).clampNorm(maxSpeed);
 
     // Rotation: same idea.
-    double desiredOmega = Math.max(-maxOmega, Math.min(maxOmega, cmd.omega()));
+    desiredOmega = Math.max(-maxOmega, Math.min(maxOmega, cmd.omega()));
     double dOmega = Math.max(-maxAlpha * dt, Math.min(maxAlpha * dt, desiredOmega - omega));
     omega += dOmega;
 
     position = position.plus(velocity.times(dt));
     heading = Angles.wrap(heading + omega * dt);
     keepInside(field);
+    finishStep(dt);
+  }
+
+  /**
+   * Records the acceleration over the step that just ended, like an accelerometer would feel it:
+   *
+   * <pre>
+   *   a = (v_end - v_start) / dt
+   * </pre>
+   *
+   * {@link #step} calls this itself; SimWorld calls it again after collisions have changed the
+   * velocity, so hitting a wall or a robot shows up as a large deceleration.
+   */
+  public void finishStep(double dt) {
+    acceleration = dt > 0.0 ? velocity.minus(velocityBeforeStep).times(1.0 / dt) : Vec2.ZERO;
   }
 
   /** Stop at the field walls: clamp position and kill velocity into the wall. */
@@ -97,6 +116,21 @@ public final class RobotBody {
   /** The velocity this robot is trying to drive at (its last command, speed-capped). */
   public Vec2 desiredVelocity() {
     return desiredVelocity;
+  }
+
+  /** The turn rate this robot is trying to reach (its last command, rate-capped; rad/s). */
+  public double desiredOmega() {
+    return desiredOmega;
+  }
+
+  /** Turn rate (rad/s, CCW positive). */
+  public double omega() {
+    return omega;
+  }
+
+  /** Acceleration over the last step, including the effect of collisions (m/s^2). */
+  public Vec2 acceleration() {
+    return acceleration;
   }
 
   public double heading() {
