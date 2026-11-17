@@ -8,9 +8,10 @@ README "Current findings" or CLAUDE.md. Results go to `docs/findings/contact-sen
 
 - [x] 0. Study harness (`phantom.sim.ContactStudy`) and baseline numbers on unchanged code
 - [x] 1. Sim drive telemetry: commanded/measured velocity, acceleration, DC-motor current, noise
-- [ ] 2. `ContactDetector` (core, pure): stall + current + deceleration + vision, with hysteresis
-- [ ] 3. `PinTimer` / `RulesGuard` use the detector (replaces camera-only and stall-only contact)
-- [ ] 4. Wall-aware back-off (left / right / straight back, 0.5 s look-ahead)
+- [x] 2. `ContactDetector` (core, pure): stall + current + deceleration + vision, with hysteresis
+- [x] 3. `PinTimer` / `RulesGuard` use the detector (replaces camera-only and stall-only contact)
+- [x] 4. Wall-aware back-off (`EscapePlanner`: left / right / straight back, 0.5 s look-ahead)
+- [ ] 4b. Unit tests with hand-computed values for ContactDetector, EscapePlanner, PinTimer.updateContacts
 - [ ] 5. Results over 10 seeds, findings doc, calibration procedure
 - [ ] 6. PR (not merged)
 

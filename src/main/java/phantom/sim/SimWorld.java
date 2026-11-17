@@ -225,15 +225,33 @@ public final class SimWorld {
    */
   public Set<Integer> selfPressingNow() {
     Set<Integer> out = new HashSet<>();
+    for (int id : selfNearContactNow()) {
+      Vec2 toward = bodyOf(id).position().minus(self.position()).normalized();
+      if (Contact.effort(self.desiredVelocity(), toward, self.maxSpeed()) > 0.1) {
+        out.add(id);
+      }
+    }
+    return out;
+  }
+
+  /** Opponents within the referee's contact tolerance of us (bumper gap <= 0.05 m), pressing or not. */
+  public Set<Integer> selfNearContactNow() {
+    Set<Integer> out = new HashSet<>();
     for (Opponent o : opponents) {
-      Vec2 toward = o.body().position().minus(self.position()).normalized();
-      boolean touching =
-          refereePins.gap(self.position(), o.body().position()) <= PinTimer.CONTACT_TOLERANCE;
-      if (touching && Contact.effort(self.desiredVelocity(), toward, self.maxSpeed()) > 0.1) {
+      if (refereePins.gap(self.position(), o.body().position()) <= PinTimer.CONTACT_TOLERANCE) {
         out.add(o.body().id());
       }
     }
     return out;
+  }
+
+  private RobotBody bodyOf(int id) {
+    for (Opponent o : opponents) {
+      if (o.body().id() == id) {
+        return o.body();
+      }
+    }
+    throw new IllegalArgumentException("no opponent " + id);
   }
 
   /** Total seconds our robot has been in contact with any opponent. */
