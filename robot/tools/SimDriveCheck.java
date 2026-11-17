@@ -149,10 +149,13 @@ public final class SimDriveCheck {
       if (last) {
         String msg = partial.toString();
         partial.setLength(0);
-        if (msg.contains("\"Joystick\"") && msg.contains("rumble")) {
-          String r = msg.replaceAll("\\s+", "");
-          if (!r.equals(lastRumble.getAndSet(r))) {
-            System.out.printf(Locale.ROOT, "[script] t=%.1f robot -> joystick: %s%n", elapsed(), r);
+        String r = msg.replaceAll("\\s+", "");
+        if (r.contains("\"type\":\"Joystick\"") && r.contains("\"device\":\"0\"")) {
+          java.util.regex.Matcher m =
+              java.util.regex.Pattern.compile("\"<rumble_left\":(\\d+)").matcher(r);
+          if (m.find() && !m.group(1).equals(lastRumble.getAndSet(m.group(1)))) {
+            System.out.printf(
+                Locale.ROOT, "[script] t=%.1f controller rumble = %s / 65535%n", elapsed(), m.group(1));
           }
         }
       }

@@ -127,8 +127,10 @@ public final class SimWorld {
    *   p_self, v_self: never changed
    * </pre>
    *
-   * So a ghost can be pushed and blocked by the real robot, but the real robot is an immovable
-   * object to a ghost. Limiting how hard the real robot may push back is the robot code's job.
+   * So a ghost can be pushed and blocked by the real robot, and nothing here moves the real robot.
+   * How the real robot reacts to a ghost pushing on it is up to the robot code (on the robot,
+   * frc.robot.defense.VirtualContact makes the assist give way using the same {@link Contact}
+   * model).
    *
    * @param selfPose measured pose (field frame)
    * @param selfVelocity measured field velocity (m/s)

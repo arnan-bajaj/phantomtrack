@@ -16,16 +16,18 @@ import phantom.sim.Contact;
  *     e_self = Contact.effort(v_cmd, n, speedCap)  (+1 = we drive into it at the speed cap)
  *     e_i    = Contact.effort(vDesired_i, -n, vMax_i)   (+1 = it drives into us flat out)
  *     v_pair = Contact.contactSpeed(e_self, e_i) * speedCap / SIM_TOP_SPEED
- *     allow  = max(0, v_pair)
- *     if v . n > allow:   v = v - (v . n - allow) * n
+ *     if v . n > v_pair:   v = v - (v . n - v_pair) * n
  * </pre>
  *
  * Contact.PUSH_SPEED (2.0 m/s) was tuned for 4.5 m/s robots, so it is scaled to our speed cap:
  * pushing a parked ghost flat out moves the pair at 2.0 / 2 / 4.5 = 22% of top speed, in the sim
  * and here. Both pushing flat out gives v_pair = 0: a stall, like a real pushing match.
  *
- * <p>Deliberately one-sided: a ghost can slow or stop the assist, but it can never make the real
- * robot move (allow is never negative, and motion away from or along the ghost is untouched).
+ * <p>Two-sided, like the sim: when the ghost pushes harder, v_pair is negative and the assist
+ * gives way, backing off along n at that speed. This only ever changes the ASSIST's command, which
+ * still goes through the speed cap, the acceleration limit and the geofence afterwards. While the
+ * driver drives, ghosts cannot move the robot at all (SimWorld.stepWithRealSelf just blocks
+ * them). Motion away from or along the ghost faster than v_pair is untouched.
  */
 public final class VirtualContact {
   private VirtualContact() {}
@@ -64,10 +66,9 @@ public final class VirtualContact {
       double effortSelf = Contact.effort(command, n, speedCap);
       double effortGhost = Contact.effort(g.desiredVelocity(), n.times(-1.0), g.maxSpeed());
       double pairSpeed = Contact.contactSpeed(effortSelf, effortGhost) * speedCap / SIM_TOP_SPEED;
-      double allow = Math.max(0.0, pairSpeed);
       double into = v.dot(n);
-      if (into > allow) {
-        v = v.minus(n.times(into - allow));
+      if (into > pairSpeed) {
+        v = v.minus(n.times(into - pairSpeed));
       }
     }
     return v;

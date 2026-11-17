@@ -48,12 +48,32 @@ class VirtualContactTest {
   }
 
   @Test
-  void aStrongerGhostCanStopUsButNeverPushTheRealRobot() {
+  void aStrongerGhostPushesTheAssistBack() {
     // Our command (0.5, 0): e_self = 0.5. Ghost full: e_ghost = 1.
-    // pair = 2.0 * (0.5 - 1) / 2 * 1/4.5 = -0.111 -> allow = max(0, -0.111) = 0.
+    // pair = 2.0 * (0.5 - 1) / 2 * 1/4.5 = -0.5 / 4.5 = -0.1111111 -> we give way at 0.111 m/s.
     var ghost = new VirtualContact.Ghost(new Vec2(0.9, 0), new Vec2(-4.5, 0), 4.5);
     Vec2 out = limit(new Vec2(0.5, 0), List.of(ghost));
-    assertEquals(0.0, out.x(), TOL); // stopped, not reversed
+    assertEquals(-0.5 / 4.5, out.x(), TOL);
+    assertEquals(0.0, out.y(), TOL);
+  }
+
+  @Test
+  void aGhostPushingAParkedAssistMovesItAtThePushSpeed() {
+    // Assist wants to stay put (0, 0): e_self = 0. Ghost full: e_ghost = 1.
+    // pair = 2.0 * (0 - 1) / 2 / 4.5 = -0.2222222; into = 0 > -0.2222 -> v = (-0.2222222, 0).
+    // Same as the sim: a robot pushed by a flat-out opponent slides at PUSH_SPEED / 2 of 4.5.
+    var ghost = new VirtualContact.Ghost(new Vec2(0.9, 0), new Vec2(-4.5, 0), 4.5);
+    Vec2 out = limit(Vec2.ZERO, List.of(ghost));
+    assertEquals(-1.0 / 4.5, out.x(), TOL);
+  }
+
+  @Test
+  void backingAwayFasterThanThePushIsUntouched() {
+    // Ghost full: pair = -0.2222 (with our effort -1: 2.0 * (-1 - 1) / 2 / 4.5 = -0.4444).
+    // Our command (-1, 0): into = -1 < -0.4444 -> unchanged.
+    var ghost = new VirtualContact.Ghost(new Vec2(0.9, 0), new Vec2(-4.5, 0), 4.5);
+    Vec2 out = limit(new Vec2(-1.0, 0), List.of(ghost));
+    assertEquals(-1.0, out.x(), TOL);
   }
 
   @Test
