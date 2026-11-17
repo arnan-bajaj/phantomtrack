@@ -111,6 +111,22 @@ public final class RobotBody {
     return maxAccel;
   }
 
+  /**
+   * Phase 7 (ghost opponents on a real robot): make this body mirror a REAL robot. Replaces the
+   * whole state with what the drivetrain measured, instead of integrating a command. Used by
+   * {@link SimWorld#stepWithRealSelf}.
+   *
+   * @param measuredVelocity the real robot's field velocity (m/s)
+   * @param desired the velocity the real robot is being asked to drive at (m/s); the pushing model
+   *     and the pin referee read it as "how hard are we driving into them"
+   */
+  void setMeasured(Pose pose, Vec2 measuredVelocity, Vec2 desired) {
+    position = pose.position();
+    heading = Angles.wrap(pose.heading());
+    velocity = measuredVelocity;
+    desiredVelocity = desired.clampNorm(maxSpeed);
+  }
+
   // Used by collision resolution only.
   void setPosition(Vec2 p) {
     position = p;
