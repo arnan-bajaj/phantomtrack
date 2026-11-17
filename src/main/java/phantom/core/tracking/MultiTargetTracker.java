@@ -54,7 +54,8 @@ import phantom.core.geometry.Vec2;
  * Track ids and re-acquisition ("handoff"):
  *     A track gets a new id when it is created and keeps it for as long as it is reported.
  *     When a reported id loses its track (timed out, or its color belief flipped to "partner"),
- *     the last state is kept as a GHOST until handoffWindowSec after that state's time.
+ *     the last state is kept as a GHOST (for handoffWindowSec, or eliminationWindowSec if that is
+ *     longer, after that state's time).
  *     When a track becomes reported, it takes over the id of the closest "old" track that passes
  *     the gates below. Old tracks are the ghosts AND the reported tracks that are COASTING right
  *     now (the new track is usually confirmed before the old one has coasted to its timeout).
@@ -65,6 +66,12 @@ import phantom.core.geometry.Vec2;
  *     A coasting track whose id is taken over is deleted: it was a stale copy of the same robot.
  *     So when the guarded robot's track dies and a new one is born in the same place, the id (and
  *     with it the focus lock and the pin timer in RulesGuard) carries over.
+ *
+ *   By elimination (optional, opponentCount > 0): a robot that was out of view for seconds comes
+ *   back far from where it was lost. If a new reportable track got no id by proximity, and
+ *     (reported tracks, counting the new one) <= opponentCount
+ *     and exactly ONE lost id is younger than eliminationWindowSec,
+ *   that lost id must belong to it: there is nobody else it can be.
  * </pre>
  *
  * <p>Zero dependencies and no knowledge of the field or of our own pose, like the rest of
@@ -109,11 +116,14 @@ public final class MultiTargetTracker implements OpponentTracker {
    * @param confirmWindow N: frames a new track has to collect them
    * @param colorErrorRate assumed chance that one color label is wrong, 0..0.5
    * @param priorOpponent P(opponent) of a brand-new track before any label, in (0, 1)
-   * @param handoffWindowSec how long after its last state a lost id can be taken over (s); 0 turns
-   *     re-acquisition off
+   * @param handoffWindowSec how long after its last state a lost id can be taken over by a nearby
+   *     track (s); 0 turns proximity re-acquisition off
    * @param handoffRadius proximity gate for re-acquisition (m)
    * @param handoffSpeedDiff velocity gate for re-acquisition (m/s); infinity disables it
    * @param handoffLeadSec extrapolate a lost track's position at most this far ahead (s)
+   * @param opponentCount how many opponents are on the field (3 in FRC); 0 turns re-acquisition
+   *     by elimination off
+   * @param eliminationWindowSec how long a lost id can be taken over by elimination (s)
    * @param confidenceSigma position uncertainty (m, 1 sigma) at which confidence has halved
    * @param firstTrackId id given to the first track; later tracks count up from it
    */
@@ -129,6 +139,8 @@ public final class MultiTargetTracker implements OpponentTracker {
       double handoffRadius,
       double handoffSpeedDiff,
       double handoffLeadSec,
+      int opponentCount,
+      double eliminationWindowSec,
       double confidenceSigma,
       int firstTrackId) {
 
@@ -153,8 +165,8 @@ public final class MultiTargetTracker implements OpponentTracker {
         throw new IllegalArgumentException("priorOpponent must be strictly between 0 and 1");
       }
       if (!(handoffWindowSec >= 0.0) || !(handoffRadius >= 0.0) || !(handoffSpeedDiff >= 0.0)
-          || !(handoffLeadSec >= 0.0)) {
-        throw new IllegalArgumentException("handoff settings must be >= 0");
+          || !(handoffLeadSec >= 0.0) || opponentCount < 0 || !(eliminationWindowSec >= 0.0)) {
+        throw new IllegalArgumentException("re-acquisition settings must be >= 0");
       }
       if (!(confidenceSigma > 0.0) || !Double.isFinite(confidenceSigma)) {
         throw new IllegalArgumentException("confidenceSigma must be > 0");
@@ -166,50 +178,75 @@ public final class MultiTargetTracker implements OpponentTracker {
 
     /**
      * Default tuning. Motion model and timeout match {@link KalmanOpponentTracker#defaults}
-     * (accel 4 m/s^2, drop after 1 s). 3-of-5 confirmation. Re-acquisition: within 2 s of the
-     * last sighting, inside 1.5 m of where the lost track would be after at most 0.5 s more of
-     * its last velocity, velocities within 3 m/s. The re-acquisition numbers are NOT MEASURED
-     * YET: they still have to be chosen from sim runs (see PROGRESS.md).
+     * (accel 4 m/s^2, drop after 1 s). 3-of-5 confirmation. Re-acquisition, chosen with SimMain's
+     * {@code --handoff-sweep} (docs/findings/anonymous-tracking.md):
+     * <ul>
+     *   <li>proximity: within 2 s of the last sighting, inside 2.5 m of where the lost track would
+     *       be after at most 0.5 s more of its last velocity, no velocity-difference gate (a 3 m/s
+     *       gate rejected good handoffs: a 3-frame-old track's velocity is too noisy);
+     *   <li>elimination: 3 opponents (FRC alliances are 3 robots), lost ids kept 4 s (8 s was
+     *       worse).
+     * </ul>
      */
     public static Config defaults(double measurementStd, double colorErrorRate) {
-      return new Config(
-          measurementStd, 4.0, 1.0, 3, 5, colorErrorRate, 0.5, 2.0, 1.5, 3.0, 0.5, 0.5, 1);
+      return new Config(measurementStd, 4.0, 1.0, 3, 5, colorErrorRate, 0.5,
+          2.0, 2.5, Double.POSITIVE_INFINITY, 0.5, 3, 4.0, 0.5, 1);
+    }
+
+    public Config withConfirmation(int hits, int window) {
+      return new Config(measurementStd, accelStd, coastTimeoutSec, hits, window, colorErrorRate,
+          priorOpponent, handoffWindowSec, handoffRadius, handoffSpeedDiff, handoffLeadSec,
+          opponentCount, eliminationWindowSec, confidenceSigma, firstTrackId);
+    }
+
+    public Config withMotion(double newAccelStd, double newCoastTimeoutSec) {
+      return new Config(measurementStd, newAccelStd, newCoastTimeoutSec, confirmHits,
+          confirmWindow, colorErrorRate, priorOpponent, handoffWindowSec, handoffRadius,
+          handoffSpeedDiff, handoffLeadSec, opponentCount, eliminationWindowSec, confidenceSigma,
+          firstTrackId);
+    }
+
+    public Config withPriorOpponent(double prior) {
+      return new Config(measurementStd, accelStd, coastTimeoutSec, confirmHits, confirmWindow,
+          colorErrorRate, prior, handoffWindowSec, handoffRadius, handoffSpeedDiff,
+          handoffLeadSec, opponentCount, eliminationWindowSec, confidenceSigma, firstTrackId);
+    }
+
+    /** Proximity re-acquisition settings (see the class comment). */
+    public Config withHandoff(double windowSec, double radius, double speedDiff, double leadSec) {
+      return new Config(measurementStd, accelStd, coastTimeoutSec, confirmHits, confirmWindow,
+          colorErrorRate, priorOpponent, windowSec, radius, speedDiff, leadSec, opponentCount,
+          eliminationWindowSec, confidenceSigma, firstTrackId);
+    }
+
+    /**
+     * Re-acquisition by elimination (see the class comment).
+     *
+     * @param opponents how many opponents are on the field; 0 = off
+     * @param windowSec how long a lost id stays available to it (s)
+     */
+    public Config withElimination(int opponents, double windowSec) {
+      return new Config(measurementStd, accelStd, coastTimeoutSec, confirmHits, confirmWindow,
+          colorErrorRate, priorOpponent, handoffWindowSec, handoffRadius, handoffSpeedDiff,
+          handoffLeadSec, opponents, windowSec, confidenceSigma, firstTrackId);
+    }
+
+    /** Every re-born track gets a brand-new id (for measuring what re-acquisition buys). */
+    public Config withoutHandoff() {
+      return withHandoff(0.0, handoffRadius, handoffSpeedDiff, handoffLeadSec)
+          .withElimination(0, 0.0);
     }
 
     /** Same settings, track ids counting up from {@code id}. */
     public Config withFirstTrackId(int id) {
       return new Config(measurementStd, accelStd, coastTimeoutSec, confirmHits, confirmWindow,
           colorErrorRate, priorOpponent, handoffWindowSec, handoffRadius, handoffSpeedDiff,
-          handoffLeadSec, confidenceSigma, id);
+          handoffLeadSec, opponentCount, eliminationWindowSec, confidenceSigma, id);
     }
 
-    public Config withConfirmation(int hits, int window) {
-      return new Config(measurementStd, accelStd, coastTimeoutSec, hits, window, colorErrorRate,
-          priorOpponent, handoffWindowSec, handoffRadius, handoffSpeedDiff, handoffLeadSec,
-          confidenceSigma, firstTrackId);
-    }
-
-    public Config withMotion(double newAccelStd, double newCoastTimeoutSec) {
-      return new Config(measurementStd, newAccelStd, newCoastTimeoutSec, confirmHits,
-          confirmWindow, colorErrorRate, priorOpponent, handoffWindowSec, handoffRadius,
-          handoffSpeedDiff, handoffLeadSec, confidenceSigma, firstTrackId);
-    }
-
-    public Config withPriorOpponent(double prior) {
-      return new Config(measurementStd, accelStd, coastTimeoutSec, confirmHits, confirmWindow,
-          colorErrorRate, prior, handoffWindowSec, handoffRadius, handoffSpeedDiff,
-          handoffLeadSec, confidenceSigma, firstTrackId);
-    }
-
-    public Config withHandoff(double windowSec, double radius, double speedDiff, double leadSec) {
-      return new Config(measurementStd, accelStd, coastTimeoutSec, confirmHits, confirmWindow,
-          colorErrorRate, priorOpponent, windowSec, radius, speedDiff, leadSec, confidenceSigma,
-          firstTrackId);
-    }
-
-    /** Every re-born track gets a brand-new id (for measuring what re-acquisition buys). */
-    public Config withoutHandoff() {
-      return withHandoff(0.0, handoffRadius, handoffSpeedDiff, handoffLeadSec);
+    /** How long a lost id is remembered at all (s). */
+    double ghostLifetimeSec() {
+      return Math.max(handoffWindowSec, opponentCount > 0 ? eliminationWindowSec : 0.0);
     }
   }
 
@@ -275,6 +312,7 @@ public final class MultiTargetTracker implements OpponentTracker {
   private int framesDropped = 0;
   private int detectionsIgnored = 0;
   private int handoffs = 0;
+  private int eliminations = 0;
 
   public MultiTargetTracker(DetectionSource source, Config config) {
     this.source = source;
@@ -450,7 +488,7 @@ public final class MultiTargetTracker implements OpponentTracker {
   }
 
   private void remember(Track tr) {
-    if (config.handoffWindowSec() > 0.0) {
+    if (config.ghostLifetimeSec() > 0.0) {
       ghosts.add(new Ghost(tr.id, tr.position(), tr.velocity(), tr.time));
     }
   }
@@ -460,7 +498,7 @@ public final class MultiTargetTracker implements OpponentTracker {
    * closest pairs first. A coasting track whose id is taken over is deleted.
    */
   private void handOff(List<Track> newlyReportable) {
-    if (config.handoffWindowSec() <= 0.0 || newlyReportable.isEmpty()) {
+    if (config.ghostLifetimeSec() <= 0.0 || newlyReportable.isEmpty()) {
       return;
     }
     record Candidate(Track track, Ghost ghost, Track coasting, double error) {}
@@ -503,6 +541,43 @@ public final class MultiTargetTracker implements OpponentTracker {
       handoffs++;
     }
     tracks.removeAll(merged);
+    eliminate(newlyReportable, done);
+  }
+
+  /** Re-acquisition by elimination (see the class comment) for tracks that got no id yet. */
+  private void eliminate(List<Track> newlyReportable, List<Track> done) {
+    if (config.opponentCount() <= 0) {
+      return;
+    }
+    int reportedAfter = newlyReportable.size();
+    for (Track tr : tracks) {
+      if (tr.reported) {
+        reportedAfter++;
+      }
+    }
+    if (reportedAfter > config.opponentCount()) {
+      return; // more opponent tracks than opponents: a duplicate or a phantom is among them
+    }
+    for (Track tr : newlyReportable) {
+      if (done.contains(tr)) {
+        continue;
+      }
+      Ghost only = null;
+      int candidates = 0;
+      for (Ghost g : ghosts) {
+        double dt = tr.time - g.time();
+        if (dt >= 0.0 && dt <= config.eliminationWindowSec()) {
+          candidates++;
+          only = g;
+        }
+      }
+      if (candidates == 1) {
+        tr.id = only.id();
+        ghosts.remove(only);
+        done.add(tr);
+        eliminations++;
+      }
+    }
   }
 
   /**
@@ -555,7 +630,7 @@ public final class MultiTargetTracker implements OpponentTracker {
         tracks.remove(i);
       }
     }
-    ghosts.removeIf(g -> nowSec - g.time() > config.handoffWindowSec());
+    ghosts.removeIf(g -> nowSec - g.time() > config.ghostLifetimeSec());
   }
 
   private double confidence(Track tr, double nowSec) {
@@ -612,8 +687,13 @@ public final class MultiTargetTracker implements OpponentTracker {
     return detectionsIgnored;
   }
 
-  /** Times a new track took over the id of a lost one. */
+  /** Times a new track took over the id of a lost or coasting one by proximity. */
   public int handoffs() {
     return handoffs;
+  }
+
+  /** Times a new track took over a lost id by elimination. */
+  public int eliminations() {
+    return eliminations;
   }
 }

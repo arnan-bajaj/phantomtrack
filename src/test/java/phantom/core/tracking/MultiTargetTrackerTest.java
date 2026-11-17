@@ -312,10 +312,26 @@ class MultiTargetTrackerTest {
 
   // ---------------- re-acquisition ----------------
 
+  /** Re-acquisition settings the hand-computed cases below were written for. */
+  private static Config handoffByHand() {
+    return Config.defaults(0.1, 0.1).withHandoff(2.0, 1.5, 3.0, 0.5).withElimination(0, 0.0);
+  }
+
+  @Test
+  void defaultReacquisitionSettings() {
+    Config c = Config.defaults(0.1, 0.1);
+    assertEquals(2.0, c.handoffWindowSec(), TOL);
+    assertEquals(2.5, c.handoffRadius(), TOL);
+    assertEquals(Double.POSITIVE_INFINITY, c.handoffSpeedDiff(), 0.0);
+    assertEquals(0.5, c.handoffLeadSec(), TOL);
+    assertEquals(3, c.opponentCount());
+    assertEquals(4.0, c.eliminationWindowSec(), TOL);
+  }
+
   @Test
   void handoffGateByHand() {
     // window 2 s, radius 1.5 m, speed gate 3 m/s, lead 0.5 s. Lost track: p (2,3), v (1,0), t 0.
-    Config c = Config.defaults(0.1, 0.1);
+    Config c = handoffByHand();
     Vec2 p = new Vec2(2, 3);
     Vec2 v = new Vec2(1, 0);
     // t = 1.0: expected = (2,3) + (1,0) * min(1.0, 0.5) = (2.5, 3)
@@ -360,7 +376,7 @@ class MultiTargetTrackerTest {
 
   @Test
   void aLostIdIsTakenOverByATrackBornInTheSamePlace() {
-    Config c = Config.defaults(0.1, 0.1);
+    Config c = handoffByHand();
     // new track confirmed at t = 1.75 at (5.5, 5): dt = 1.75 - 0.25 = 1.5 <= 2,
     // expected = (5,5) + 0 = (5,5), error 0.5 <= 1.5, speed diff 0 -> takes id 1
     List<TrackedRobot> out = loseThenReappear(c, 5.5, 1.5);
@@ -382,7 +398,7 @@ class MultiTargetTrackerTest {
     //   dt = 0.625 - 0.25 = 0.375, expected = (5,5) + 0, error = 1.2 <= 1.5, speed diff 0
     //   -> track 2 takes id 1 and the coasting copy is deleted.
     var q = new Frames();
-    var mtt = MultiTargetTracker.defaults(q, 0.1, 0.1);
+    var mtt = new MultiTargetTracker(q, handoffByHand());
     confirmAtFiveFive(mtt, q);
     frame(mtt, q, 0.375, d(6.2, 5, OPPONENT));
     frame(mtt, q, 0.5, d(6.2, 5, OPPONENT));
@@ -395,7 +411,7 @@ class MultiTargetTrackerTest {
 
     // without re-acquisition both are reported: the stale copy (id 1) and the new track (id 2)
     var q2 = new Frames();
-    var off = new MultiTargetTracker(q2, Config.defaults(0.1, 0.1).withoutHandoff());
+    var off = new MultiTargetTracker(q2, handoffByHand().withoutHandoff());
     confirmAtFiveFive(off, q2);
     frame(off, q2, 0.375, d(6.2, 5, OPPONENT));
     frame(off, q2, 0.5, d(6.2, 5, OPPONENT));
@@ -423,6 +439,63 @@ class MultiTargetTrackerTest {
     List<TrackedRobot> out = frame(mtt, q, 1.0, d(5, 5, OPPONENT));
     assertEquals(1, out.size());
     assertEquals(1, out.get(0).id());
+  }
+
+  /**
+   * Opponents A at (5,5) and B at (9,5) confirmed (ids 1, 2) by frames at 0, 0.125, 0.25. Then
+   * only B is seen; A's track times out (0.25 + 1.0) and becomes a ghost. At t0 .. t0 + 0.25 a
+   * robot is confirmed at (x, 2), far from where A was lost.
+   */
+  private static List<TrackedRobot> eliminationCase(Config c, double x, double t0, int others) {
+    var q = new Frames();
+    var mtt = new MultiTargetTracker(q, c);
+    for (double t : new double[] {0.0, 0.125, 0.25}) {
+      frame(mtt, q, t, d(5, 5, OPPONENT), d(9, 5, OPPONENT));
+    }
+    for (double t = 0.375; t < t0 - 1e-9; t += 0.125) {
+      frame(mtt, q, t, d(9, 5, OPPONENT)); // only B in view
+    }
+    List<Detection> extra = new ArrayList<>(List.of(d(9, 5, OPPONENT), d(x, 2, OPPONENT)));
+    for (int k = 0; k < others; k++) {
+      extra.add(d(13, 1 + 2 * k, OPPONENT)); // more robots appearing at the same time
+    }
+    List<TrackedRobot> out = List.of();
+    for (double t = t0; t < t0 + 0.26; t += 0.125) {
+      out = frame(mtt, q, t, extra.toArray(new Detection[0]));
+    }
+    return out;
+  }
+
+  private static int idAt(List<TrackedRobot> out, double x, double y) {
+    for (TrackedRobot r : out) {
+      if (r.position().distanceTo(new Vec2(x, y)) < 1e-6) {
+        return r.id();
+      }
+    }
+    throw new AssertionError("no track at (" + x + ", " + y + ")");
+  }
+
+  @Test
+  void eliminationGivesTheOnlyLostIdToTheOnlyNewOpponent() {
+    // Proximity off (radius 0) so only elimination can hand ids over. 3 opponents, 4 s window.
+    Config c = Config.defaults(0.1, 0.1).withHandoff(2.0, 0.0, Double.POSITIVE_INFINITY, 0.5)
+        .withElimination(3, 4.0);
+    // New robot confirmed at (2,2) at t = 3.25: |(2,2) - (5,5)| = 4.24 m, far from A.
+    // Reported after it: B + new = 2 <= 3 opponents; lost ids younger than 4 s: only A's
+    // (3.25 - 0.25 = 3.0 s) -> it must be A: takes id 1.
+    List<TrackedRobot> out = eliminationCase(c, 2.0, 3.0, 0);
+    assertEquals(2, out.size());
+    assertEquals(1, idAt(out, 2, 2));
+    assertEquals(2, idAt(out, 9, 5));
+    // Elimination off: a brand-new id (3)
+    assertEquals(3, idAt(eliminationCase(c.withElimination(0, 0.0), 2.0, 3.0, 0), 2, 2));
+    // Lost 3.0 s before but the window is 2.5 s: A's id has expired -> new id 3
+    assertEquals(3, idAt(eliminationCase(c.withElimination(3, 2.5), 2.0, 3.0, 0), 2, 2));
+    // Three robots appear at once, (2,2), (13,1), (13,3): B + 3 new = 4 opponent tracks > 3
+    // opponents, so one of them is a duplicate or a phantom: no elimination at all.
+    List<TrackedRobot> crowd = eliminationCase(c, 2.0, 3.0, 2);
+    assertEquals(4, crowd.size());
+    assertTrue(crowd.stream().noneMatch(r -> r.id() == 1), crowd.toString());
   }
 
   // ---------------- robustness ----------------

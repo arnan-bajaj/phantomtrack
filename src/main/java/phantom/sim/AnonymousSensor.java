@@ -12,6 +12,8 @@ import phantom.core.tracking.AllianceLabel;
 import phantom.core.tracking.Detection;
 import phantom.core.tracking.DetectionFrame;
 import phantom.core.tracking.DetectionSource;
+import phantom.core.tracking.Measurement;
+import phantom.core.tracking.MeasurementSource;
 
 /**
  * Simulated robot-detecting camera that reports what a real pipeline reports: ANONYMOUS
@@ -109,7 +111,16 @@ public final class AnonymousSensor implements DetectionSource {
     }
   }
 
-  private record Pending(DetectionFrame frame, double deliverAt) {}
+  /** A frame plus, for each detection, who it really was: a body id, CLUTTER or SELF. */
+  private record Pending(DetectionFrame frame, int[] sources, double deliverAt) {}
+
+  private record Tagged(Detection detection, int source) {}
+
+  /** Source of a false detection. */
+  public static final int CLUTTER = -1;
+
+  /** Source of a detection of our own bumpers. */
+  public static final int SELF = -2;
 
   private final SimWorld world;
   private final Config config;
@@ -137,23 +148,62 @@ public final class AnonymousSensor implements DetectionSource {
 
   @Override
   public List<DetectionFrame> poll(double nowSec) {
+    List<DetectionFrame> out = new ArrayList<>();
+    for (Pending p : due(nowSec)) {
+      out.add(p.frame());
+    }
+    return out;
+  }
+
+  /**
+   * The same camera with identity handed over, as the old model assumed: only detections of
+   * opponents, each tagged with that opponent's id (partners, clutter and our own bumpers are
+   * dropped). For measuring what occlusion alone costs. Use either this or {@link #poll}, not both.
+   */
+  public MeasurementSource knownIdView() {
+    return nowSec -> {
+      List<Measurement> out = new ArrayList<>();
+      for (Pending p : due(nowSec)) {
+        List<Detection> ds = p.frame().detections();
+        for (int i = 0; i < ds.size(); i++) {
+          if (isOpponent(p.sources()[i])) {
+            out.add(new Measurement(p.sources()[i], ds.get(i).position(),
+                p.frame().timestampSec()));
+          }
+        }
+      }
+      return out;
+    };
+  }
+
+  private boolean isOpponent(int bodyId) {
+    for (SimWorld.Opponent o : world.opponents()) {
+      if (o.body().id() == bodyId) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** Captures a frame if one is due, then removes and returns every frame due for delivery. */
+  private List<Pending> due(double nowSec) {
     if (nowSec + 1e-9 >= nextSample) {
       capture(nowSec);
       nextSample = nowSec + 1.0 / config.camera().rateHz();
     }
-    List<DetectionFrame> out = new ArrayList<>();
+    List<Pending> out = new ArrayList<>();
     Iterator<Pending> it = pending.iterator();
     while (it.hasNext()) {
       Pending p = it.next();
       if (p.deliverAt() <= nowSec + 1e-9) {
-        out.add(p.frame());
+        out.add(p);
         it.remove();
       }
     }
     return out;
   }
 
-  private record Robot(Vec2 position, AllianceLabel truth) {}
+  private record Robot(int id, Vec2 position, AllianceLabel truth) {}
 
   private void capture(double nowSec) {
     NoisySensor.Config cam = config.camera();
@@ -164,13 +214,13 @@ public final class AnonymousSensor implements DetectionSource {
 
     List<Robot> robots = new ArrayList<>();
     for (SimWorld.Opponent o : world.opponents()) {
-      robots.add(new Robot(o.body().position(), AllianceLabel.OPPONENT));
+      robots.add(new Robot(o.body().id(), o.body().position(), AllianceLabel.OPPONENT));
     }
     for (SimWorld.Opponent p : world.partners()) {
-      robots.add(new Robot(p.body().position(), AllianceLabel.PARTNER));
+      robots.add(new Robot(p.body().id(), p.body().position(), AllianceLabel.PARTNER));
     }
 
-    List<Detection> dets = new ArrayList<>();
+    List<Tagged> dets = new ArrayList<>();
     for (Robot r : robots) {
       Vec2 rel = r.position().minus(eye);
       if (rel.norm() > cam.rangeM()) {
@@ -194,12 +244,14 @@ public final class AnonymousSensor implements DetectionSource {
       if (random.nextDouble() < cam.dropout()) {
         continue;
       }
-      dets.add(new Detection(addNoise(r.position(), cam.noiseStd()), label(r.truth())));
+      dets.add(new Tagged(
+          new Detection(addNoise(r.position(), cam.noiseStd()), label(r.truth())), r.id()));
       robotDetections++;
     }
 
     if (random.nextDouble() < config.selfDetectionRate()) {
-      dets.add(new Detection(addNoise(eye, cam.noiseStd()), label(AllianceLabel.PARTNER)));
+      dets.add(new Tagged(
+          new Detection(addNoise(eye, cam.noiseStd()), label(AllianceLabel.PARTNER)), SELF));
       selfDetections++;
     }
 
@@ -215,22 +267,29 @@ public final class AnonymousSensor implements DetectionSource {
       if (p.x() < 0 || p.x() > field.length() || p.y() < 0 || p.y() > field.width()) {
         continue; // outside the field: the pipeline throws it away
       }
-      dets.add(new Detection(p, l));
+      dets.add(new Tagged(new Detection(p, l), CLUTTER));
       clutterDetections++;
     }
 
     // Our own robot: nothing real can be inside our bumpers.
-    List<Detection> kept = new ArrayList<>();
-    for (Detection d : dets) {
-      if (d.position().distanceTo(eye) < field.robotHalfSize()) {
+    List<Tagged> kept = new ArrayList<>();
+    for (Tagged d : dets) {
+      if (d.detection().position().distanceTo(eye) < field.robotHalfSize()) {
         removedNearSelf++;
       } else {
         kept.add(d);
       }
     }
     Collections.shuffle(kept, random);
+    List<Detection> frame = new ArrayList<>();
+    int[] sources = new int[kept.size()];
+    for (int i = 0; i < kept.size(); i++) {
+      frame.add(kept.get(i).detection());
+      sources[i] = kept.get(i).source();
+    }
     frames++;
-    pending.add(new Pending(new DetectionFrame(nowSec, kept), nowSec + cam.latencySec()));
+    pending.add(new Pending(new DetectionFrame(nowSec, frame), sources,
+        nowSec + cam.latencySec()));
   }
 
   private Vec2 addNoise(Vec2 p, double std) {

@@ -12,12 +12,19 @@ import java.util.Map;
 
 /**
  * Runs every setup x opponent kind x sensor x seed and writes one CSV row per run, for graphing
- * in a spreadsheet. Perfect-sensor runs are deterministic, so they run once.
+ * in a spreadsheet. Perfect-sensor runs are deterministic, so they run once. Then the
+ * anonymous-tracking grid ({@link SimMain#runAnonymousComparison}): alliance partners on, open
+ * field and choke, known-id vs anonymous tracking, re-acquisition on and off.
  *
  * <pre>
  *   slowed_pct     = 100 * (guarded_avg_cycle - baseline_avg_cycle) / baseline_avg_cycle
  *   all_slowed_pct = 100 * (baseline_total_cycles - total_cycles) / total_cycles
+ *   (the baseline is "No defense" on the same field, with partners if the row has them)
  * </pre>
+ *
+ * Tracking columns (pos_rmse_m onward) are scored without ids, the same way for every tracker:
+ * see {@link SimSession#matchTracks}. est_error_m and track_coverage are the older id-based
+ * numbers and are empty for anonymous rows (their track ids are not opponent ids).
  */
 public final class BatchRunner {
   private BatchRunner() {}
@@ -26,7 +33,12 @@ public final class BatchRunner {
       "opponents,setup,mode,hold,pin_guard,sensor,focus,seed,seconds,"
           + "guarded_avg_cycle_s,baseline_avg_cycle_s,slowed_pct,total_cycles,"
           + "baseline_total_cycles,all_slowed_pct,contact_s,pins,backoffs,"
-          + "est_error_m,track_coverage,target_switches";
+          + "est_error_m,track_coverage,target_switches,"
+          + "layout,tracking,partners,variant,pos_rmse_m,id_switches_per_min,"
+          + "false_track_s_per_min,fresh_false_track_s_per_min,coverage_opp0,coverage_opp1,"
+          + "coverage_opp2,coverage_mean,partner_as_opp_s_per_min,"
+          + "fresh_partner_as_opp_s_per_min,partner_contact_s,redesignations_per_min,handoffs,"
+          + "eliminations";
 
   public static void run(double seconds, int seeds, File out) throws IOException {
     File dir = out.getAbsoluteFile().getParentFile();
@@ -66,6 +78,7 @@ public final class BatchRunner {
           }
         }
       }
+      rows += writeAnonymousGrid(w, seconds, seeds, summary);
     }
     System.out.printf("Wrote %d runs (%.0f s each, %d seeds for noisy sensors) to %s%n%n",
         rows, seconds, seeds, out.getPath());
@@ -74,6 +87,54 @@ public final class BatchRunner {
       double[] a = e.getValue();
       System.out.printf("%-58s %+9.0f%% %10.1f%n", e.getKey(), a[0] / a[2], a[1] / a[2]);
     }
+  }
+
+  /** The anonymous-tracking grid, partners on. Returns the number of rows written. */
+  private static int writeAnonymousGrid(PrintWriter w, double seconds, int seeds,
+      Map<String, double[]> summary) throws IOException {
+    int rows = 0;
+    for (Scenarios.OpponentKind kind : Scenarios.OpponentKind.values()) {
+      for (Scenarios.Layout layout : SimMain.ANON_LAYOUTS) {
+        SimMain.Setup none = new SimMain.Setup("No defense", -1, false, true).withLayout(layout)
+            .withTracking(SimSession.Tracking.KNOWN_ID, true, SimSession.Variant.STANDARD);
+        SimSession base = SimMain.run(none, kind, seconds, null);
+        double baseCycle = guardedCycle(base);
+        int baseTotal = SimMain.totalCycles(base);
+        w.println(row(kind, none, base, seconds, baseCycle, baseTotal));
+        rows++;
+        for (SimMain.Setup setup : SimMain.anonymousSetups()) {
+          for (SimSession.Sensor sensor : SimSession.Sensor.values()) {
+            for (SimSession.Tracking tracking : SimSession.Tracking.values()) {
+              for (SimSession.Variant variant : SimSession.Variant.values()) {
+                if (!SimMain.anonymousRowExists(sensor, tracking, variant)) {
+                  continue;
+                }
+                int n = sensor == SimSession.Sensor.PERFECT ? 1 : seeds;
+                for (long seed = 1; seed <= n; seed++) {
+                  SimMain.Setup one = setup.withLayout(layout).withSensor(sensor, seed)
+                      .withTracking(tracking, true, variant);
+                  SimSession s = SimMain.run(one, kind, seconds, null);
+                  w.println(row(kind, one, s, seconds, baseCycle, baseTotal));
+                  rows++;
+                  String key = SimMain.kindLabel(kind) + " | " + layout.field().name()
+                      + " + partners | " + setup.label() + " | " + sensor.label() + " | "
+                      + tracking.label() + (variant == SimSession.Variant.STANDARD ? ""
+                          : " | " + variant.name().toLowerCase());
+                  double[] acc = summary.computeIfAbsent(key, k -> new double[3]);
+                  double slowedNow = setup.focus() >= 0
+                      ? 100 * (guardedCycle(s) - baseCycle) / baseCycle
+                      : 100.0 * (baseTotal - SimMain.totalCycles(s)) / SimMain.totalCycles(s);
+                  acc[0] += slowedNow;
+                  acc[1] += s.world().pinViolations();
+                  acc[2] += 1;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+    return rows;
   }
 
   static double guardedCycle(SimSession s) {
@@ -108,7 +169,29 @@ public final class BatchRunner {
         String.valueOf(s.assist().backoffsTriggered()),
         noisy ? fmt(s.metrics().meanEstimateError()) : "0",
         noisy ? fmt(s.metrics().trackCoverage()) : "1",
-        String.valueOf(s.metrics().targetSwitches()));
+        String.valueOf(s.metrics().targetSwitches()),
+        quote(setup.layout().field().name()),
+        noisy ? s.tracking().label() : "Perfect",
+        String.valueOf(setup.partners()),
+        setup.variant().name().toLowerCase(),
+        fmt(s.metrics().positionRmse()),
+        fmt(perMinute(s.metrics().idSwitches(), seconds)),
+        fmt(perMinute(s.metrics().falseTrackSeconds(), seconds)),
+        fmt(perMinute(s.metrics().freshFalseTrackSeconds(), seconds)),
+        fmt(s.metrics().coverage(0)),
+        fmt(s.metrics().coverage(1)),
+        fmt(s.metrics().coverage(2)),
+        fmt(s.metrics().meanCoverage()),
+        fmt(perMinute(s.metrics().partnerAsOpponentSeconds(), seconds)),
+        fmt(perMinute(s.metrics().freshPartnerAsOpponentSeconds(), seconds)),
+        fmt(s.world().selfPartnerContactSeconds()),
+        s.multiTracker() == null ? "" : fmt(perMinute(s.redesignations(), seconds)),
+        s.multiTracker() == null ? "" : String.valueOf(s.multiTracker().handoffs()),
+        s.multiTracker() == null ? "" : String.valueOf(s.multiTracker().eliminations()));
+  }
+
+  private static double perMinute(double count, double seconds) {
+    return count / (seconds / 60.0);
   }
 
   private static String fmt(double v) {
