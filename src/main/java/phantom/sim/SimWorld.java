@@ -14,8 +14,13 @@ import phantom.core.rules.PinTimer;
 import phantom.core.tracking.TrackedRobot;
 
 /**
- * Ground-truth world: our robot plus opponent bots. Knows every pose exactly. What the defense
- * code is allowed to see goes through an OpponentTracker, never through this class directly.
+ * Ground-truth world: our robot, opponent bots and (optionally) our alliance partners. Knows every
+ * pose exactly. What the defense code is allowed to see goes through an OpponentTracker, never
+ * through this class directly.
+ *
+ * <p>Partners are physical robots like everyone else (they collide, block and get seen by
+ * cameras), but they never count as opponents: not in {@link #truth()}, not in pins, not in the
+ * opponent contact time.
  */
 public final class SimWorld {
   /** One opponent: its body and the behavior driving it. */
@@ -24,8 +29,10 @@ public final class SimWorld {
   private final FieldConfig field;
   private final RobotBody self;
   private final List<Opponent> opponents;
+  private final List<Opponent> partners;
   private double timeSec = 0.0;
   private double selfContactSeconds = 0.0;
+  private double selfPartnerContactSeconds = 0.0;
 
   // Referee view: counts pins from ground truth (no safety margin).
   private final PinTimer refereePins;
@@ -39,9 +46,18 @@ public final class SimWorld {
   private final java.util.ArrayDeque<Snapshot> history = new java.util.ArrayDeque<>();
 
   public SimWorld(FieldConfig field, RobotBody self, List<Opponent> opponents) {
+    this(field, self, opponents, List.of());
+  }
+
+  /**
+   * @param partners our alliance partners (bots on our side); empty for the classic 1 vs 3
+   */
+  public SimWorld(
+      FieldConfig field, RobotBody self, List<Opponent> opponents, List<Opponent> partners) {
     this.field = field;
     this.self = self;
     this.opponents = new ArrayList<>(opponents);
+    this.partners = new ArrayList<>(partners);
     this.refereePins = new PinTimer(PinRules.placeholder(), field.robotHalfSize());
     recordHistory();
   }
@@ -51,6 +67,9 @@ public final class SimWorld {
     now.put(self.id(), self.position());
     for (Opponent o : opponents) {
       now.put(o.body().id(), o.body().position());
+    }
+    for (Opponent p : partners) {
+      now.put(p.body().id(), p.body().position());
     }
     history.addLast(new Snapshot(timeSec, now));
     while (history.size() > 1 && history.peekFirst().time() < timeSec - HISTORY_SEC) {
@@ -81,18 +100,31 @@ public final class SimWorld {
     for (Opponent o : opponents) {
       oppCmds.add(o.behavior().decide(timeSec, dt, o.body(), this));
     }
+    List<ChassisCommand> partnerCmds = new ArrayList<>();
+    for (Opponent p : partners) {
+      partnerCmds.add(p.behavior().decide(timeSec, dt, p.body(), this));
+    }
 
     self.step(selfCmd, dt, field);
     for (int i = 0; i < opponents.size(); i++) {
       opponents.get(i).body().step(oppCmds.get(i), dt, field);
     }
+    for (int i = 0; i < partners.size(); i++) {
+      partners.get(i).body().step(partnerCmds.get(i), dt, field);
+    }
 
     boolean selfTouching = false;
+    boolean selfTouchingPartner = false;
     for (int iter = 0; iter < 3; iter++) {
-      selfTouching |= resolveCollisions();
+      int touched = resolveCollisions();
+      selfTouching |= (touched & TOUCHED_OPPONENT) != 0;
+      selfTouchingPartner |= (touched & TOUCHED_PARTNER) != 0;
     }
     if (selfTouching) {
       selfContactSeconds += dt;
+    }
+    if (selfTouchingPartner) {
+      selfPartnerContactSeconds += dt;
     }
     timeSec += dt;
     recordHistory();
@@ -128,12 +160,13 @@ public final class SimWorld {
    * shared velocity along the contact normal according to the pushing-match model in {@link
    * Contact}: whoever is driving harder into the other wins; equal effort stalls.
    *
-   * @return true if our robot touched any opponent
+   * @return bit flags: {@link #TOUCHED_OPPONENT} if our robot touched an opponent,
+   *     {@link #TOUCHED_PARTNER} if it touched a partner
    */
-  private boolean resolveCollisions() {
+  private int resolveCollisions() {
     List<RobotBody> all = allBodies();
     double minDist = 2.0 * field.robotHalfSize();
-    boolean selfTouching = false;
+    int touched = 0;
     for (int i = 0; i < all.size(); i++) {
       for (int j = i + 1; j < all.size(); j++) {
         RobotBody a = all.get(i);
@@ -144,7 +177,7 @@ public final class SimWorld {
           continue;
         }
         if (a == self || b == self) {
-          selfTouching = true;
+          touched |= isPartner(a == self ? b : a) ? TOUCHED_PARTNER : TOUCHED_OPPONENT;
         }
         Vec2 n = dist < 1e-9 ? new Vec2(1.0, 0.0) : delta.times(1.0 / dist);
         double effortA = Contact.effort(a.desiredVelocity(), n, a.maxSpeed());
@@ -165,7 +198,19 @@ public final class SimWorld {
         b.keepInside(field);
       }
     }
-    return selfTouching;
+    return touched;
+  }
+
+  private static final int TOUCHED_OPPONENT = 1;
+  private static final int TOUCHED_PARTNER = 2;
+
+  private boolean isPartner(RobotBody b) {
+    for (Opponent p : partners) {
+      if (p.body() == b) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /** Exact opponent states, as a perfect sensor would report them. */
@@ -178,11 +223,24 @@ public final class SimWorld {
     return out;
   }
 
+  /** Exact partner states (ids are the partners' body ids). Empty when there are no partners. */
+  public List<TrackedRobot> partnerTruth() {
+    List<TrackedRobot> out = new ArrayList<>();
+    for (Opponent p : partners) {
+      RobotBody b = p.body();
+      out.add(new TrackedRobot(b.id(), b.position(), b.velocity(), timeSec, 1.0));
+    }
+    return out;
+  }
+
   private List<RobotBody> allBodies() {
     List<RobotBody> all = new ArrayList<>();
     all.add(self);
     for (Opponent o : opponents) {
       all.add(o.body());
+    }
+    for (Opponent p : partners) {
+      all.add(p.body());
     }
     return all;
   }
@@ -199,6 +257,11 @@ public final class SimWorld {
     return opponents;
   }
 
+  /** Our alliance partners (same record type as opponents: a body and a behavior). */
+  public List<Opponent> partners() {
+    return partners;
+  }
+
   public double timeSec() {
     return timeSec;
   }
@@ -211,5 +274,10 @@ public final class SimWorld {
   /** Total seconds our robot has been in contact with any opponent. */
   public double selfContactSeconds() {
     return selfContactSeconds;
+  }
+
+  /** Total seconds our robot has been in contact with one of our own partners. */
+  public double selfPartnerContactSeconds() {
+    return selfPartnerContactSeconds;
   }
 }
