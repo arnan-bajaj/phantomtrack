@@ -11,7 +11,7 @@ README "Current findings" or CLAUDE.md. Results go to `docs/findings/contact-sen
 - [x] 2. `ContactDetector` (core, pure): stall + current + deceleration + vision, with hysteresis
 - [x] 3. `PinTimer` / `RulesGuard` use the detector (replaces camera-only and stall-only contact)
 - [x] 4. Wall-aware back-off (`EscapePlanner`: left / right / straight back, 0.5 s look-ahead)
-- [ ] 4b. Unit tests with hand-computed values for ContactDetector, EscapePlanner, PinTimer.updateContacts
+- [x] 4b. Unit tests with hand-computed values for ContactDetector, EscapePlanner, PinTimer.updateContacts
 - [ ] 5. Results over 10 seeds, findings doc, calibration procedure
 - [ ] 6. PR (not merged)
 
