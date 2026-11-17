@@ -179,7 +179,7 @@ public final class MultiTargetTracker implements OpponentTracker {
     /**
      * Default tuning. Motion model and timeout match {@link KalmanOpponentTracker#defaults}
      * (accel 4 m/s^2, drop after 1 s). 3-of-5 confirmation. Re-acquisition, chosen with SimMain's
-     * {@code --handoff-sweep} (docs/findings/anonymous-tracking.md):
+     * {@code --tracker-sweep} (docs/findings/anonymous-tracking.md):
      * <ul>
      *   <li>proximity: within 2 s of the last sighting, inside 2.5 m of where the lost track would
      *       be after at most 0.5 s more of its last velocity, no velocity-difference gate (a 3 m/s
