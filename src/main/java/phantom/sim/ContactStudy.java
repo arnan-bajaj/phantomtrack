@@ -16,6 +16,7 @@ import java.util.Locale;
  *
  *   slowed_pct = 100 * (guarded_avg_cycle - baseline_avg_cycle) / baseline_avg_cycle
  *                (baseline = no defense, same layout and opponent kind)
+ *   pressing_s, false_positive_s, missed_s: see SimSession.Metrics#recordContactSensing
  * </pre>
  */
 public final class ContactStudy {
@@ -23,7 +24,7 @@ public final class ContactStudy {
 
   static final String HEADER =
       "layout,opponents,setup,sensor,seed,seconds,guarded_avg_cycle_s,baseline_avg_cycle_s,"
-          + "slowed_pct,pins,backoffs,contact_s";
+          + "slowed_pct,pins,backoffs,contact_s,pressing_s,false_positive_s,missed_s";
 
   private static final int[] MODES = {3, 4};
   private static final String[] NAMES = {"Line mirror + hold", "Cut-off + hold"};
@@ -47,10 +48,14 @@ public final class ContactStudy {
         "=== Contact study: %.0f s per run, %d seeds, guarding #%d ===%n",
         seconds, seeds, SimMain.GUARDED_ID);
     System.out.printf(
-        "%-10s %-7s %-19s %-10s %8s %9s %8s %9s %10s%n",
-        "Layout", "Opps", "Setup", "Sensor", "Slowed", "Pins/run", "Max pins", "Runs>0", "Back-offs");
+        "%-10s %-7s %-19s %-10s %8s %9s %8s %9s %10s %9s %8s %8s%n",
+        "Layout", "Opps", "Setup", "Sensor", "Slowed", "Pins/run", "Max pins", "Runs>0", "Back-offs",
+        "Press s", "FP s", "Miss s");
     int totalPins = 0;
     int totalRuns = 0;
+    double totalPress = 0;
+    double totalFp = 0;
+    double totalMiss = 0;
     try (PrintWriter w = new PrintWriter(out, StandardCharsets.UTF_8)) {
       w.println(HEADER);
       for (Scenarios.Layout layout : Scenarios.Layout.values()) {
@@ -67,6 +72,9 @@ public final class ContactStudy {
               int maxPins = 0;
               int runsWithPins = 0;
               int backoffs = 0;
+              double press = 0;
+              double fp = 0;
+              double miss = 0;
               for (long seed = 1; seed <= seeds; seed++) {
                 SimMain.Setup setup =
                     new SimMain.Setup(NAMES[m], MODES[m], true, true, sensor, seed)
@@ -83,6 +91,9 @@ public final class ContactStudy {
                 maxPins = Math.max(maxPins, p);
                 runsWithPins += p > 0 ? 1 : 0;
                 backoffs += s.assist().backoffsTriggered();
+                press += s.metrics().pressingSeconds();
+                fp += s.metrics().falsePositiveSeconds();
+                miss += s.metrics().missedSeconds();
                 w.println(
                     String.join(
                         ",",
@@ -97,12 +108,15 @@ public final class ContactStudy {
                         fmt(slowed),
                         String.valueOf(p),
                         String.valueOf(s.assist().backoffsTriggered()),
-                        fmt(s.world().selfContactSeconds())));
+                        fmt(s.world().selfContactSeconds()),
+                        fmt(s.metrics().pressingSeconds()),
+                        fmt(s.metrics().falsePositiveSeconds()),
+                        fmt(s.metrics().missedSeconds())));
               }
               totalPins += pins;
               totalRuns += seeds;
               System.out.printf(
-                  "%-10s %-7s %-19s %-10s %+7.1f%% %9.2f %8d %6d/%-2d %10.1f%n",
+                  "%-10s %-7s %-19s %-10s %+7.1f%% %9.2f %8d %6d/%-2d %10.1f %9.1f %8.1f %8.1f%n",
                   layout.field().name(),
                   SimMain.kindLabel(kind),
                   NAMES[m],
@@ -112,15 +126,23 @@ public final class ContactStudy {
                   maxPins,
                   runsWithPins,
                   seeds,
-                  (double) backoffs / seeds);
+                  (double) backoffs / seeds,
+                  press / seeds,
+                  fp / seeds,
+                  miss / seeds);
+              totalPress += press;
+              totalFp += fp;
+              totalMiss += miss;
             }
           }
         }
       }
     }
     System.out.printf(
-        "%nTotal: %d pins in %d runs (%.2f per run). CSV: %s%n",
-        totalPins, totalRuns, (double) totalPins / totalRuns, out.getPath());
+        "%nTotal: %d pins in %d runs (%.2f per run). Per run: pressing %.1f s, false positive"
+            + " %.1f s, missed %.1f s. CSV: %s%n",
+        totalPins, totalRuns, (double) totalPins / totalRuns, totalPress / totalRuns,
+        totalFp / totalRuns, totalMiss / totalRuns, out.getPath());
   }
 
   private static String fmt(double v) {
