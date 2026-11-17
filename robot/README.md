@@ -272,7 +272,8 @@ touch:
   template and copy `build.gradle`'s shared-sources block over.
 - **Package names and APIs:** WPILib has announced larger API changes for 2027 (including package
   renames). `Convert`, `AllianceFrame`, `DefenseTeleop`, `DefenseTelemetry`, `DefenseDashboard`,
-  `RobotContainer`, `Robot`, `drive/` import WPILib; nothing else does.
+  `RobotContainer`, `Robot`, `Main` and the two files in `drive/` import WPILib (10 files);
+  nothing else does.
 - **Controllers:** HID classes and button/axis numbering may change with the new Driver Station.
   `DefenseTeleop` reads the sticks and trigger in one place; `RobotContainer` has the bindings.
 - **Time:** `Timer.getFPGATimestamp()` assumes an FPGA clock. Use whatever 2027 provides for
