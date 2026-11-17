@@ -165,6 +165,27 @@ public final class SimSession {
     this(world, sensor, tracking, new Pipeline(tracker, null, null));
   }
 
+  /**
+   * For experiments: a camera other than the presets. Anonymous tracking uses MultiTargetTracker
+   * defaults changed by {@code tuning}; known-id tracking uses the same camera model with ids
+   * handed over (no occlusion, like the old NoisySensor) and the usual Kalman tracker.
+   *
+   * @param label only used as a label (and to draw estimates)
+   */
+  static SimSession withCamera(SimWorld world, Sensor label, AnonymousSensor.Config camera,
+      long seed, Tracking tracking, UnaryOperator<MultiTargetTracker.Config> tuning) {
+    if (tracking == Tracking.ANONYMOUS) {
+      AnonymousSensor cam = new AnonymousSensor(world, camera, seed);
+      MultiTargetTracker mtt = new MultiTargetTracker(cam, tuning.apply(
+          MultiTargetTracker.Config.defaults(camera.camera().noiseStd(), camera.colorErrorRate())
+              .withFirstTrackId(FIRST_TRACK_ID)));
+      return new SimSession(world, label, tracking, new Pipeline(mtt, mtt, cam));
+    }
+    return new SimSession(world, label, Tracking.KNOWN_ID, new Pipeline(
+        KalmanOpponentTracker.defaults(new NoisySensor(world, camera.camera(), seed),
+            camera.camera().noiseStd()), null, null));
+  }
+
   private SimSession(SimWorld world, Sensor sensor, Tracking tracking, Pipeline pipeline) {
     this.world = world;
     this.sensor = sensor;

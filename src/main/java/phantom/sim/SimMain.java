@@ -25,8 +25,8 @@ import phantom.sim.ui.SimWindow;
  *   ./gradlew run --args="--batch"                  every combination x seeds -> results/batch.csv
  *   ./gradlew run --args="--batch 180 10"           same, 180 s per run, 10 seeds
  *   ./gradlew run --args="--anonymous 180 5"        only the anonymous-tracking tables (s, seeds)
- *   ./gradlew run --args="--handoff-sweep 180 5"    re-acquisition settings compared (how the
- *                                                   MultiTargetTracker defaults were chosen)
+ *   ./gradlew run --args="--tracker-sweep 180 5"    MultiTargetTracker settings compared (how its
+ *                                                   defaults were chosen) + camera coverage
  * </pre>
  */
 public final class SimMain {
@@ -47,9 +47,16 @@ public final class SimMain {
           args.length > 2 ? Integer.parseInt(args[2]) : SEEDS);
       return;
     }
-    if (args.length > 0 && args[0].equals("--handoff-sweep")) {
-      runHandoffSweep(args.length > 1 ? Double.parseDouble(args[1]) : 180.0,
-          args.length > 2 ? Integer.parseInt(args[2]) : SEEDS);
+    if (args.length > 0 && args[0].equals("--tracker-sweep")) {
+      double sweepSeconds = args.length > 1 ? Double.parseDouble(args[1]) : 180.0;
+      int sweepSeeds = args.length > 2 ? Integer.parseInt(args[2]) : SEEDS;
+      runHandoffSweep(sweepSeconds, sweepSeeds);
+      System.out.println();
+      runConfirmationSweep(sweepSeconds, sweepSeeds);
+      System.out.println();
+      runCameraCoverageSweep(sweepSeconds, sweepSeeds);
+      System.out.println();
+      runCoverageBreakdown(sweepSeconds, sweepSeeds);
       return;
     }
     boolean headless = args.length > 0 && args[0].equals("--headless");
@@ -363,13 +370,20 @@ public final class SimMain {
     double inf = Double.POSITIVE_INFINITY;
     return List.of(
         new HandoffOption("off", c -> c.withoutHandoff()),
-        new HandoffOption("r1.5 lead0.5 v3 (guess)", c -> c.withHandoff(2.0, 1.5, 3.0, 0.5)),
-        new HandoffOption("r1.5 lead0.5 v-", c -> c.withHandoff(2.0, 1.5, inf, 0.5)),
-        new HandoffOption("r1.5 lead1.0 v-", c -> c.withHandoff(2.0, 1.5, inf, 1.0)),
-        new HandoffOption("r2.5 lead0.5 v- (dflt)", c -> c.withHandoff(2.0, 2.5, inf, 0.5)),
-        new HandoffOption("r3.5 lead1.0 v- w3", c -> c.withHandoff(3.0, 3.5, inf, 1.0)),
-        new HandoffOption("dflt + elim 4 s", c -> c.withElimination(3, 4.0)),
-        new HandoffOption("dflt + elim 8 s", c -> c.withElimination(3, 8.0)));
+        new HandoffOption("r1.5 lead0.5 v3 (1st guess)",
+            c -> c.withHandoff(2.0, 1.5, 3.0, 0.5).withElimination(0, 0.0)),
+        new HandoffOption("r1.5 lead0.5 v-",
+            c -> c.withHandoff(2.0, 1.5, inf, 0.5).withElimination(0, 0.0)),
+        new HandoffOption("r1.5 lead1.0 v-",
+            c -> c.withHandoff(2.0, 1.5, inf, 1.0).withElimination(0, 0.0)),
+        new HandoffOption("r2.5 lead0.5 v-",
+            c -> c.withHandoff(2.0, 2.5, inf, 0.5).withElimination(0, 0.0)),
+        new HandoffOption("r3.5 lead1.0 v- w3",
+            c -> c.withHandoff(3.0, 3.5, inf, 1.0).withElimination(0, 0.0)),
+        new HandoffOption("r2.5 + elim 4 s (default)",
+            c -> c.withHandoff(2.0, 2.5, inf, 0.5).withElimination(3, 4.0)),
+        new HandoffOption("r2.5 + elim 8 s",
+            c -> c.withHandoff(2.0, 2.5, inf, 0.5).withElimination(3, 8.0)));
   }
 
   /**
@@ -379,48 +393,171 @@ public final class SimMain {
   static void runHandoffSweep(double seconds, int seeds) throws IOException {
     System.out.printf("=== Re-acquisition sweep: %.0f s, %d seeds x 2 opponent kinds x 2 fields x"
         + " Realistic+Bad, partners on ===%n", seconds, seeds);
-    System.out.printf("%-31s %-24s %13s %9s %9s %9s %7s %6s%n", "Setup", "Re-acquisition",
+    System.out.printf("%-31s %-27s %13s %9s %9s %9s %7s %6s%n", "Setup", "Re-acquisition",
         "Slowed", "IDsw/min", "Repnt/m", "Handof/m", "Pins", "Cover");
     for (Setup setup : anonymousSetups()) {
       for (HandoffOption option : handoffOptions()) {
-        RowStats st = new RowStats();
-        for (Scenarios.OpponentKind kind : Scenarios.OpponentKind.values()) {
-          for (Scenarios.Layout layout : ANON_LAYOUTS) {
-            SimSession base = run(new Setup("No defense", -1, false, true).withLayout(layout)
-                .withTracking(SimSession.Tracking.KNOWN_ID, true, SimSession.Variant.STANDARD),
-                kind, seconds, null);
-            double baseCycle =
-                base.world().opponents().get(GUARDED_ID).behavior().averageCycleSeconds();
-            int baseTotal = totalCycles(base);
-            for (SimSession.Sensor sensor : new SimSession.Sensor[] {
-                SimSession.Sensor.REALISTIC, SimSession.Sensor.BAD}) {
-              for (long seed = 1; seed <= seeds; seed++) {
-                SimWorld w = Scenarios.three(layout.field(), kind, Scenarios.DEFENDER_START, true);
-                SimSession s = new SimSession(w, sensor, seed, SimSession.Tracking.ANONYMOUS,
-                    option.tuning());
-                s.assist().setModeIndex(setup.modeIndex());
-                s.assist().setHoldEnabled(setup.hold());
-                if (setup.focus() >= 0) {
-                  s.lockOn(setup.focus());
-                } else {
-                  s.assist().setFocusOpponentId(-1);
-                }
-                int steps = (int) Math.round(seconds / SimSession.DT);
-                for (int i = 0; i < steps; i++) {
-                  s.step(ChassisCommand.STOP, true);
-                }
-                st.addRun(s, seconds, baseCycle, baseTotal);
-              }
-            }
-          }
-        }
+        RowStats st = pooled(setup,
+            new SimSession.Sensor[] {SimSession.Sensor.REALISTIC, SimSession.Sensor.BAD},
+            seconds, seeds, (w, cam, seed) -> new SimSession(w, cam, seed,
+                SimSession.Tracking.ANONYMOUS, option.tuning()));
         int slowed = setup.focus() >= 0 ? RowStats.SLOWED : RowStats.ALL_SLOWED;
-        System.out.printf("%-31s %-24s %13s %9s %9s %9s %7s %6s%n", setup.label(), option.label(),
+        System.out.printf("%-31s %-27s %13s %9s %9s %9s %7s %6s%n", setup.label(), option.label(),
             pct(st.mean(slowed)) + " +-" + num(st.stderr(slowed), 1),
             num(st.mean(RowStats.ID_SWITCHES_PER_MIN), 1),
             setup.focus() >= 0 ? num(st.mean(RowStats.REPOINTS_PER_MIN), 1) : "-",
             num(st.mean(RowStats.HANDOFFS_PER_MIN), 1), num(st.mean(RowStats.PINS), 2),
             pctPlain(st.mean(RowStats.COVERED)));
+      }
+    }
+  }
+
+  /** Makes one session for a sweep: (world, camera, seed) -> session. */
+  interface SessionMaker {
+    SimSession make(SimWorld world, SimSession.Sensor camera, long seed);
+  }
+
+  /**
+   * Runs {@code setup} over both opponent kinds, open + choke, the given cameras and seeds, with
+   * partners on, and pools the results.
+   */
+  static RowStats pooled(Setup setup, SimSession.Sensor[] cameras, double seconds, int seeds,
+      SessionMaker maker) throws IOException {
+    RowStats st = new RowStats();
+    for (Scenarios.OpponentKind kind : Scenarios.OpponentKind.values()) {
+      for (Scenarios.Layout layout : ANON_LAYOUTS) {
+        SimSession base = run(new Setup("No defense", -1, false, true).withLayout(layout)
+            .withTracking(SimSession.Tracking.KNOWN_ID, true, SimSession.Variant.STANDARD),
+            kind, seconds, null);
+        double baseCycle = base.world().opponents().get(GUARDED_ID).behavior().averageCycleSeconds();
+        int baseTotal = totalCycles(base);
+        for (SimSession.Sensor camera : cameras) {
+          for (long seed = 1; seed <= seeds; seed++) {
+            SimWorld w = Scenarios.three(layout.field(), kind, Scenarios.DEFENDER_START, true);
+            SimSession s = maker.make(w, camera, seed);
+            s.assist().setModeIndex(setup.modeIndex());
+            s.assist().setHoldEnabled(setup.hold());
+            if (setup.focus() >= 0) {
+              s.lockOn(setup.focus());
+            } else {
+              s.autoFocus();
+            }
+            int steps = (int) Math.round(seconds / SimSession.DT);
+            for (int i = 0; i < steps; i++) {
+              s.step(ChassisCommand.STOP, true);
+            }
+            st.addRun(s, seconds, baseCycle, baseTotal);
+          }
+        }
+      }
+    }
+    return st;
+  }
+
+  /** M-of-N confirmation settings, per camera (they run at 30 Hz and 15 Hz). */
+  static void runConfirmationSweep(double seconds, int seeds) throws IOException {
+    System.out.printf("=== Confirmation sweep (M of N), anonymous tracking: %.0f s, %d seeds x 2"
+        + " opponent kinds x 2 fields, partners on, both setups pooled ===%n", seconds, seeds);
+    System.out.printf("%-9s %-8s %13s %9s %8s %11s %10s %9s%n", "Camera", "M of N", "Slowed(all)",
+        "IDsw/min", "Cover", "FreshFalse", "FreshPtnr", "Repnt/m");
+    int[][] options = {{3, 5}, {2, 4}, {2, 3}};
+    for (SimSession.Sensor camera : new SimSession.Sensor[] {
+        SimSession.Sensor.REALISTIC, SimSession.Sensor.BAD}) {
+      for (int[] mn : options) {
+        RowStats all = new RowStats();
+        RowStats locked = null;
+        for (Setup setup : anonymousSetups()) {
+          RowStats st = pooled(setup, new SimSession.Sensor[] {camera}, seconds, seeds,
+              (w, cam, seed) -> new SimSession(w, cam, seed, SimSession.Tracking.ANONYMOUS,
+                  c -> c.withConfirmation(mn[0], mn[1])));
+          if (setup.focus() >= 0) {
+            locked = st;
+          } else {
+            all = st;
+          }
+        }
+        System.out.printf("%-9s %-8s %13s %9s %8s %11s %10s %9s%n", camera.label(),
+            mn[0] + " of " + mn[1] + (mn[0] == 3 && mn[1] == 5 ? "*" : ""),
+            pct(all.mean(RowStats.ALL_SLOWED)) + " +-" + num(all.stderr(RowStats.ALL_SLOWED), 1),
+            num(all.mean(RowStats.ID_SWITCHES_PER_MIN), 1), pctPlain(all.mean(RowStats.COVERED)),
+            num(all.mean(RowStats.FRESH_FALSE_S_PER_MIN), 1),
+            num(all.mean(RowStats.FRESH_PARTNER_S_PER_MIN), 1),
+            num(locked.mean(RowStats.REPOINTS_PER_MIN), 1));
+      }
+    }
+    System.out.println("(* = default. Slowed, IDsw/min, Cover, Fresh* = Line mirror + hold,"
+        + " auto=threat; Repnt/m = Cut-off + hold, locked #0.)");
+  }
+
+  /** Does seeing more of the field fix identity? The Realistic camera with 140 vs 360 degrees. */
+  static void runCameraCoverageSweep(double seconds, int seeds) throws IOException {
+    System.out.printf("=== Camera coverage: Realistic camera with 140 vs 360 degrees of view,"
+        + " %.0f s, %d seeds x 2 opponent kinds x 2 fields, partners on ===%n", seconds, seeds);
+    System.out.printf("%-31s %-9s %-10s %13s %9s %8s %9s%n", "Setup", "View", "Tracking",
+        "Slowed", "IDsw/min", "Cover", "Repnt/m");
+    AnonymousSensor.Config narrow = AnonymousSensor.Config.realistic();
+    NoisySensor.Config c = narrow.camera();
+    AnonymousSensor.Config wide = new AnonymousSensor.Config(
+        new NoisySensor.Config("Realistic 360", c.noiseStd(), c.latencySec(), c.dropout(), 360.0,
+            c.rangeM(), c.rateHz()),
+        narrow.colorErrorRate(), narrow.clutterPerFrame(), narrow.clutterOpponentShare(),
+        narrow.selfDetectionRate(), narrow.occlusion());
+    for (Setup setup : anonymousSetups()) {
+      for (AnonymousSensor.Config cam : List.of(narrow, wide)) {
+        for (SimSession.Tracking tracking : new SimSession.Tracking[] {
+            SimSession.Tracking.KNOWN_ID, SimSession.Tracking.ANONYMOUS}) {
+          RowStats st = pooled(setup, new SimSession.Sensor[] {SimSession.Sensor.REALISTIC},
+              seconds, seeds, (w, label, seed) -> SimSession.withCamera(w, label, cam, seed,
+                  tracking, x -> x));
+          int slowed = setup.focus() >= 0 ? RowStats.SLOWED : RowStats.ALL_SLOWED;
+          System.out.printf("%-31s %-9s %-10s %13s %9s %8s %9s%n", setup.label(),
+              (int) cam.camera().fovDeg() + " deg", tracking.label(),
+              pct(st.mean(slowed)) + " +-" + num(st.stderr(slowed), 1),
+              num(st.mean(RowStats.ID_SWITCHES_PER_MIN), 1), pctPlain(st.mean(RowStats.COVERED)),
+              num(st.mean(RowStats.REPOINTS_PER_MIN), 1));
+        }
+      }
+    }
+    System.out.println("(Known-ID here = the old camera model: no occlusion, ids handed over.)");
+  }
+
+  /**
+   * Where coverage goes between the old known-id model and anonymous tracking, one change at a
+   * time (Line mirror + hold, auto=threat).
+   */
+  static void runCoverageBreakdown(double seconds, int seeds) throws IOException {
+    System.out.printf("=== Coverage breakdown, Line mirror + hold auto=threat: %.0f s, %d seeds x 2"
+        + " opponent kinds x 2 fields, partners on ===%n", seconds, seeds);
+    System.out.printf("%-9s %-58s %6s %5s %13s%n", "Camera", "Pipeline", "Cover", "RMSE",
+        "Slowed(all)");
+    Setup lm = anonymousSetups().get(0);
+    for (SimSession.Sensor camera : new SimSession.Sensor[] {
+        SimSession.Sensor.REALISTIC, SimSession.Sensor.BAD}) {
+      AnonymousSensor.Config full = camera.anonymous;
+      AnonymousSensor.Config clean =
+          full.withClutter(0.0, 0.5).withSelfDetectionRate(0.0).withColorError(0.0);
+      List<String> labels = List.of(
+          "known ids, old camera (no occlusion)",
+          "known ids + occlusion",
+          "anonymous (the full new camera)",
+          "anonymous, no false/self detections, no color errors",
+          "anonymous, same, and confirmed on the first detection");
+      List<SessionMaker> makers = List.of(
+          (w, cam, seed) -> new SimSession(w, cam, seed, SimSession.Tracking.KNOWN_ID,
+              SimSession.Variant.STANDARD),
+          (w, cam, seed) -> new SimSession(w, cam, seed, SimSession.Tracking.KNOWN_ID_OCCLUSION,
+              SimSession.Variant.STANDARD),
+          (w, cam, seed) -> new SimSession(w, cam, seed, SimSession.Tracking.ANONYMOUS,
+              SimSession.Variant.STANDARD),
+          (w, cam, seed) -> SimSession.withCamera(w, cam, clean, seed,
+              SimSession.Tracking.ANONYMOUS, c -> c),
+          (w, cam, seed) -> SimSession.withCamera(w, cam, clean, seed,
+              SimSession.Tracking.ANONYMOUS, c -> c.withConfirmation(1, 1)));
+      for (int i = 0; i < labels.size(); i++) {
+        RowStats st = pooled(lm, new SimSession.Sensor[] {camera}, seconds, seeds, makers.get(i));
+        System.out.printf("%-9s %-58s %6s %5s %13s%n", camera.label(), labels.get(i),
+            pctPlain(st.mean(RowStats.COVERED)), num(st.mean(RowStats.RMSE), 2),
+            pct(st.mean(RowStats.ALL_SLOWED)) + " +-" + num(st.stderr(RowStats.ALL_SLOWED), 1));
       }
     }
   }
