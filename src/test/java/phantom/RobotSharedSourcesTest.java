@@ -1,5 +1,6 @@
 package phantom;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -8,6 +9,9 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -62,6 +66,81 @@ class RobotSharedSourcesTest {
         bad.isEmpty(),
         () -> "files shared with robot/ must not depend on " + FORBIDDEN + ":\n  "
             + String.join("\n  ", bad));
+  }
+
+  /** Simple names of the classes in phantom/sim itself (not phantom/sim/ui). */
+  private static Set<String> simClassNames() throws IOException {
+    Set<String> out = new TreeSet<>();
+    try (Stream<Path> s = Files.list(SRC.resolve("phantom/sim"))) {
+      s.filter(p -> p.toString().endsWith(".java"))
+          .forEach(p -> out.add(p.getFileName().toString().replace(".java", "")));
+    }
+    return out;
+  }
+
+  private static Set<String> listedSimNames() throws IOException {
+    Set<String> out = new TreeSet<>();
+    for (String p : patterns()) {
+      if (!p.equals("phantom/core/**")) {
+        out.add(Path.of(p).getFileName().toString().replace(".java", ""));
+      }
+    }
+    return out;
+  }
+
+  /** The 8 sim files robot/ compiles on purpose (ghost opponents). Changing the list is a decision. */
+  @Test
+  void exactlyTheEightGhostFilesAreShared() throws IOException {
+    assertEquals(
+        new TreeSet<>(
+            List.of(
+                "Avoidance", "Contact", "CyclerBehavior", "OpponentBehavior", "PerfectTracker",
+                "RobotBody", "Scenarios", "SimWorld")),
+        listedSimNames());
+  }
+
+  /**
+   * A listed sim file can use another phantom.sim class with no import (same package). The robot
+   * build would then need that class too, and it would never have been scanned above. So the list
+   * must be closed: every phantom.sim class a listed file mentions in code is listed itself.
+   */
+  @Test
+  void sharedSimFilesOnlyUseOtherSharedSimFiles() throws IOException {
+    Set<String> sim = simClassNames();
+    Set<String> listed = listedSimNames();
+    List<String> missing = new ArrayList<>();
+    for (String p : patterns()) {
+      if (p.equals("phantom/core/**")) {
+        continue;
+      }
+      for (String name : SourceScan.referencedNames(Files.readString(SRC.resolve(p)))) {
+        if (sim.contains(name) && !listed.contains(name)) {
+          missing.add(p + " uses " + name);
+        }
+      }
+    }
+    assertTrue(missing.isEmpty(), () -> "not in robot/shared-sources.txt: " + missing);
+  }
+
+  @Test
+  void referencedNamesSeesCodeOnly() {
+    String src =
+        "class A { // uses NoisySensor\n"
+            + "  /* SimSession */ RobotBody b = new RobotBody(\"SimMain\"); Scenarios.Layout l;\n"
+            + "}\n";
+    // NoisySensor (line comment), SimSession (block comment), SimMain (string) are not code.
+    assertEquals(
+        new TreeSet<>(List.of("A", "Layout", "RobotBody", "Scenarios")),
+        SourceScan.referencedNames(src));
+  }
+
+  @Test
+  void aSameSourceReferenceToANonSharedSimClassWouldBeCaught() throws IOException {
+    // Sanity check of the closure check: SimSession uses NoisySensor (same package, no import).
+    Set<String> refs =
+        SourceScan.referencedNames(Files.readString(SRC.resolve("phantom/sim/SimSession.java")));
+    assertTrue(refs.contains("NoisySensor"));
+    assertFalse(listedSimNames().contains("NoisySensor"));
   }
 
   @Test

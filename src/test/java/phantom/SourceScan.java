@@ -42,6 +42,37 @@ public final class SourceScan {
     // followed by a word boundary, so "phantom.simulation" doesn't match "phantom.sim".
     Pattern forbidden = Pattern.compile("(?<![\\w.])(" + alt + ")\\b");
     List<String> out = new ArrayList<>();
+    String[] lines = source.split("\n", -1);
+    List<String> code = codeLines(source);
+    for (int i = 0; i < lines.length; i++) {
+      Matcher m = forbidden.matcher(code.get(i));
+      if (m.find()) {
+        out.add(label + ":" + (i + 1) + ": " + lines[i].trim());
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Simple class names (capitalized identifiers) used in the code of {@code source}, comments
+   * and string literals left out. Used to check which classes of a package a file depends on
+   * (same-package references need no import, so an import scan alone misses them).
+   */
+  public static java.util.Set<String> referencedNames(String source) {
+    java.util.Set<String> out = new java.util.TreeSet<>();
+    Pattern ident = Pattern.compile("\\b[A-Z][A-Za-z0-9_]*\\b");
+    for (String line : codeLines(source)) {
+      Matcher m = ident.matcher(line.replaceAll("\"(\\\\.|[^\"\\\\])*\"", "\"\""));
+      while (m.find()) {
+        out.add(m.group());
+      }
+    }
+    return out;
+  }
+
+  /** The source split into lines with every comment removed (line numbers are kept). */
+  public static List<String> codeLines(String source) {
+    List<String> out = new ArrayList<>();
     boolean inBlock = false;
     String[] lines = source.split("\n", -1);
     for (int i = 0; i < lines.length; i++) {
@@ -73,10 +104,7 @@ public final class SourceScan {
           }
         }
       }
-      Matcher m = forbidden.matcher(code);
-      if (m.find()) {
-        out.add(label + ":" + (i + 1) + ": " + line.trim());
-      }
+      out.add(code.toString());
     }
     return out;
   }
