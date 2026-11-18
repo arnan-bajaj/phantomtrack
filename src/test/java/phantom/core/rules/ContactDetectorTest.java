@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import phantom.core.geometry.Vec2;
 import phantom.core.tracking.TrackedRobot;
@@ -201,6 +202,46 @@ class ContactDetectorTest {
     assertTrue(Double.isFinite(e.probability()));
     assertTrue(e.direction().isFinite());
     assertTrue(e.pushDirection().isFinite());
+  }
+
+  @Test
+  void trackWithoutAnIdFeedsUnknownAndNeverCollidesWithIt() {
+    var d = detector();
+    // A track with id -1 (the same number as UNKNOWN) right in front, gap = 0.9 - 0.9 = 0.
+    // Camera only (idle): it gets no hypothesis of its own; its vision goes to UNKNOWN:
+    //   L_unknown = -4 + 5.5 * ramp(0; 0.45, 0.05) + 0 = 1.5 -> raw 0.8175745
+    //   p: 0 (t = 0, dt = 0) -> 0.4087873 (t = 0.02, factor 0.02/0.04 = 0.5) -> 0.6131809 -> 0.7153777
+    Vec2 front = new Vec2(5.9, 5);
+    ContactEstimate e = null;
+    for (int i = 0; i <= 3; i++) {
+      double t = i * 0.02;
+      e = d.update(t, DriveTelemetry.idle(t), SELF, List.of(opp(-1, front, t)));
+    }
+    assertEquals(0.7153777, e.probabilities().get(ContactDetector.UNKNOWN), TOL);
+    assertEquals(Set.of(ContactDetector.UNKNOWN), e.probabilities().keySet()); // no "-1 opponent"
+    assertTrue(e.inContactWith(ContactDetector.UNKNOWN));
+    assertEquals(ContactDetector.UNKNOWN, e.opponentId());
+    // direction: toward that track, unit((5.9,5) - (5,5)) = (1,0); not the (zero) push direction
+    assertEquals(1.0, e.direction().x(), TOL);
+    assertEquals(0.0, e.direction().y(), TOL);
+  }
+
+  @Test
+  void aRepeatedIdIsNotTwoRobotsUnderOneHypothesis() {
+    var d = detector();
+    // #7 far away (gap = 3.0 - 0.9 = 2.1, vision 0) and a second "#7" in front (gap 0).
+    // The first #7 owns the hypothesis; the repeat counts as an id-less track (-> UNKNOWN), so
+    // the far #7 is not stepped twice per loop or credited with the near robot's contact.
+    ContactEstimate e = null;
+    for (int i = 0; i <= 3; i++) {
+      double t = i * 0.02;
+      e = d.update(t, DriveTelemetry.idle(t), SELF,
+          List.of(opp(7, new Vec2(8, 5), t), opp(7, new Vec2(5.9, 5), t)));
+    }
+    // #7: L = -4 -> raw 0.0179862; after 3 half-steps p = 0.0179862 * (1 - 0.5^3) = 0.0157379
+    assertEquals(0.0157379, e.probabilities().get(7), TOL);
+    assertFalse(e.inContactWith(7));
+    assertEquals(0.7153777, e.probabilities().get(ContactDetector.UNKNOWN), TOL);
   }
 
   @Test

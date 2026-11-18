@@ -12,4 +12,14 @@ import java.util.List;
 public interface OpponentTracker {
   /** Current opponent tracks. Never null; may be empty. */
   List<TrackedRobot> getOpponents(double nowSec);
+
+  /**
+   * True if a robot keeps its track id for as long as it is tracked, and comes back under the
+   * same id after being lost (ground truth, or a camera that reads robot numbers). False for
+   * trackers that may give the same robot a new id (anonymous detections): the pin guard then
+   * lets a new id continue the contact episode of a robot lost nearby (see RulesGuard).
+   */
+  default boolean idsAreStable() {
+    return true;
+  }
 }

@@ -16,6 +16,7 @@ import phantom.core.modes.DefenseTarget;
 import phantom.core.rules.ContactDetector;
 import phantom.core.rules.ContactEstimate;
 import phantom.core.rules.DriveTelemetry;
+import phantom.core.rules.EpisodeKeys;
 import phantom.core.rules.EscapePlanner;
 import phantom.core.rules.PinRules;
 import phantom.core.rules.PinTimer;
@@ -26,6 +27,15 @@ import phantom.core.tracking.TrackedRobot;
  * about to exceed the limit.
  *
  * <pre>
+ *   EPISODE KEYS. Everything below is keyed by contact episode, not by raw track id: every loop
+ *   the tracks are re-labelled by {@link EpisodeKeys} (rebind radius REBIND_RADIUS, freshness
+ *   FRESH_SECONDS). A tracker's own handoff keeps the id, so the key stays; a robot that comes
+ *   back under a NEW id near where an open episode's opponent was lost continues that episode
+ *   (its pin time and the detector's contact belief). Only for trackers whose ids can change
+ *   ({@link #setIdsAreStable}; DefenseAssist sets it from OpponentTracker.idsAreStable()).
+ *   With stable ids every key is the id itself. Ids in the outputs (targets, lastContact,
+ *   contactSeconds) are the current track ids again.
+ *
  *   CONTACT comes from {@link ContactDetector} (stall + drive current + deceleration + camera):
  *     contact with opponent i   = detector is in contact with i
  *     contact with UNKNOWN      = detector is in contact with something it cannot identify,
@@ -41,6 +51,9 @@ import phantom.core.tracking.TrackedRobot;
  *     a new touch on opponent i starts from UNKNOWN's time if UNKNOWN was touching within
  *     HANDOVER_SECONDS; a new UNKNOWN touch starts from the largest time among opponents that
  *     are no longer tracked or stopped touching within HANDOVER_SECONDS.
+ *     If ids can change (anonymous tracking), a new touch on i also starts from the time of any
+ *     other episode whose track is lost or stale (older than FRESH_SECONDS) and that was
+ *     touching within HANDOVER_SECONDS: the robot we were pushing, back under another track.
  *
  *   BACK OFF from id when contactSeconds(id) >= limit - safetyMargin, until a fresh estimate
  *   says gap >= resetSeparation (the episode itself stays open until the extra RESET_MARGIN, so
@@ -66,6 +79,15 @@ public final class RulesGuard {
   public static final double MAX_BACKOFF_SECONDS = 3.0;
   public static final double STEP = 1.0;
   public static final double BACKOFF_SPEED = 3.0;
+
+  /**
+   * Back off this long before the pin limit (s) at the speeds the guard was tuned for: back-off at
+   * BACKOFF_SPEED on a robot that accelerates at TUNED_ACCEL. See {@link #safetyMarginFor}.
+   */
+  public static final double BASE_MARGIN = 0.5;
+
+  /** Acceleration of the simulated robot BASE_MARGIN was tuned on (m/s^2). */
+  public static final double TUNED_ACCEL = 6.0;
 
   /** How far ahead a back-off direction must be free of walls (s of travel at BACKOFF_SPEED). */
   public static final double LOOKAHEAD_SECONDS = 0.5;
@@ -103,10 +125,18 @@ public final class RulesGuard {
   /** A wall explains a stall if the probe step makes at most this fraction of its length. */
   public static final double WALL_PROGRESS = 0.3;
 
+  /**
+   * PLACEHOLDER. A track with a new id this close to where a lost episode's opponent was last
+   * seen fresh continues that episode (m). About two Realistic-camera position errors (0.4-0.5 m).
+   */
+  public static final double REBIND_RADIUS = 1.0;
+
   private static final int UNKNOWN = ContactDetector.UNKNOWN;
 
   private final PinTimer pinTimer;
   private final ContactDetector detector;
+  private final EpisodeKeys keys = new EpisodeKeys(REBIND_RADIUS, FRESH_SECONDS, true);
+  private boolean idsAreStable = false;
   private final FieldConfig field;
   private final double safetyMargin;
   private final Map<Integer, Double> backoffStarts = new HashMap<>();
@@ -152,8 +182,59 @@ public final class RulesGuard {
     this.safetyMargin = safetyMargin;
   }
 
+  /**
+   * Time to drive one back-off STEP from standing still, accelerating at {@code accel} up to
+   * {@code speed} (trapezoid, no braking at the end):
+   *
+   * <pre>
+   *   d_acc = speed^2 / (2 accel)                 distance covered while speeding up
+   *   T     = sqrt(2 STEP / accel)                if STEP <= d_acc   (never reaches top speed)
+   *         = speed / accel + (STEP - d_acc) / speed                otherwise
+   * </pre>
+   *
+   * +infinity if speed or accel is not a positive number.
+   */
+  public static double backoffSeconds(double speed, double accel) {
+    if (!(speed > 0.0) || !(accel > 0.0) || !Double.isFinite(speed) || !Double.isFinite(accel)) {
+      return Double.POSITIVE_INFINITY;
+    }
+    double dAcc = speed * speed / (2.0 * accel);
+    if (STEP <= dAcc) {
+      return Math.sqrt(2.0 * STEP / accel);
+    }
+    return speed / accel + (STEP - dAcc) / speed;
+  }
+
+  /**
+   * Safety margin for a robot whose back-off is limited to {@code maxSpeed} and {@code maxAccel}.
+   * BASE_MARGIN was tuned on a robot that backs off at BACKOFF_SPEED (3 m/s) and accelerates at
+   * TUNED_ACCEL (6 m/s^2). A slower robot needs longer to get out of contact, so it starts that
+   * much earlier:
+   *
+   * <pre>
+   *   v      = min(maxSpeed, BACKOFF_SPEED)                    (the back-off never asks for more)
+   *   T_ref  = backoffSeconds(BACKOFF_SPEED, TUNED_ACCEL)      = 3/6 + (1 - 0.75)/3 = 0.5833 s
+   *   margin = BASE_MARGIN + max(0, backoffSeconds(v, maxAccel) - T_ref)
+   *   clamped to at most limitSeconds (then the guard backs off as soon as contact starts)
+   * </pre>
+   *
+   * Examples: 4.5 m/s and 6 m/s^2 -> 0.5 s (unchanged); 1.0 m/s and 2 m/s^2 (the Phase 7 first
+   * test) -> 0.5 + (1.25 - 0.5833) = 1.1667 s, so it backs off at 3.0 - 1.1667 = 1.833 s.
+   */
+  public static double safetyMarginFor(PinRules rules, double maxSpeed, double maxAccel) {
+    double v = Math.min(maxSpeed, BACKOFF_SPEED);
+    double extra = backoffSeconds(v, maxAccel) - backoffSeconds(BACKOFF_SPEED, TUNED_ACCEL);
+    double margin = BASE_MARGIN + Math.max(0.0, extra);
+    return Math.min(margin, rules.limitSeconds());
+  }
+
+  /** Back off this long before the limit (s). */
+  public double safetyMargin() {
+    return safetyMargin;
+  }
+
   public static RulesGuard defaults(FieldConfig field) {
-    return new RulesGuard(PinRules.placeholder(), field, 0.5);
+    return new RulesGuard(PinRules.placeholder(), field, BASE_MARGIN);
   }
 
   /** Camera only: no drive telemetry this loop (we are treated as not pushing). */
@@ -192,12 +273,14 @@ public final class RulesGuard {
       Optional<DefenseTarget> target,
       DriveTelemetry telemetry) {
     Vec2 selfPos = self.position();
-    ContactEstimate est = detector.update(nowSec, telemetry, selfPos, opponents);
-    lastContact = est;
+    // From here on every "id" is an episode key (see the class comment).
+    List<TrackedRobot> keyed = keys.rekey(nowSec, opponents, pinTimer::episodeOpen);
+    ContactEstimate est = detector.update(nowSec, telemetry, selfPos, keyed);
+    lastContact = toTrackIds(est);
 
     Map<Integer, Vec2> positions = new HashMap<>();
     Map<Integer, Double> ages = new HashMap<>();
-    for (TrackedRobot r : opponents) {
+    for (TrackedRobot r : keyed) {
       positions.put(r.id(), r.positionAt(nowSec));
       ages.put(r.id(), nowSec - r.timestampSec());
       lastSeen.put(r.id(), new EscapePlanner.Threat(r.positionAt(nowSec), r.velocity(), true));
@@ -281,8 +364,19 @@ public final class RulesGuard {
             pinTimer.raiseTo(UNKNOWN, pinTimer.contactSeconds(other));
           }
         }
-      } else if (nowSec - pinTimer.lastContactSec(UNKNOWN) <= HANDOVER_SECONDS) {
-        pinTimer.raiseTo(id, pinTimer.contactSeconds(UNKNOWN));
+      } else {
+        if (nowSec - pinTimer.lastContactSec(UNKNOWN) <= HANDOVER_SECONDS) {
+          pinTimer.raiseTo(id, pinTimer.contactSeconds(UNKNOWN));
+        }
+        if (!idsAreStable) { // the robot we were pushing may be back under a new id
+          for (int other : pinTimer.openEpisodes()) {
+            boolean lostOrStale = !positions.containsKey(other) || ages.get(other) > FRESH_SECONDS;
+            if (other != UNKNOWN && other != id && lostOrStale
+                && nowSec - pinTimer.lastContactSec(other) <= HANDOVER_SECONDS) {
+              pinTimer.raiseTo(id, pinTimer.contactSeconds(other));
+            }
+          }
+        }
       }
     }
 
@@ -400,6 +494,7 @@ public final class RulesGuard {
     }
 
     double heading = nearestPos.minus(selfPos).angle(); // keep facing them
+    nearest = nearest == UNKNOWN ? UNKNOWN : keys.aliasOf(nearest); // back to a track id
     if (escapeOption == null) {
       return new DefenseTarget(selfPos, heading, Vec2.ZERO, nearest); // nowhere to go: stop pushing
     }
@@ -509,8 +604,43 @@ public final class RulesGuard {
     return lastContact;
   }
 
-  /** Pin time the guard has counted against this opponent (or UNKNOWN) in the open episode (s). */
+  /**
+   * Pin time the guard has counted in the open episode of this track id (or UNKNOWN) (s). A track
+   * that continues an episode under a new id reports the episode's whole time.
+   */
   public double contactSeconds(int id) {
-    return pinTimer.contactSeconds(id);
+    int key = keys.keyOf(id);
+    return key == -2 ? 0.0 : pinTimer.contactSeconds(key);
+  }
+
+  /**
+   * False (the default) for trackers that may give a robot a new id: a new id near a lost
+   * opponent then continues its episode. True turns that off (a new id is a different robot).
+   */
+  public void setIdsAreStable(boolean stable) {
+    idsAreStable = stable;
+    keys.setRebindNewIds(!stable);
+  }
+
+  /** Times a track with a new id continued a lost opponent's episode. */
+  public int episodeRebinds() {
+    return keys.rebinds();
+  }
+
+  /** The detector's estimate with episode keys turned back into current track ids. */
+  private ContactEstimate toTrackIds(ContactEstimate e) {
+    Set<Integer> contacts = new HashSet<>();
+    for (int k : e.contacts()) {
+      contacts.add(k == UNKNOWN ? UNKNOWN : keys.aliasOf(k));
+    }
+    Map<Integer, Double> probabilities = new HashMap<>();
+    for (Map.Entry<Integer, Double> en : e.probabilities().entrySet()) {
+      int id = en.getKey() == UNKNOWN ? UNKNOWN : keys.aliasOf(en.getKey());
+      probabilities.merge(id, en.getValue(), Math::max);
+    }
+    int opponent = e.opponentId() == UNKNOWN ? UNKNOWN : keys.aliasOf(e.opponentId());
+    return new ContactEstimate(
+        e.inContact(), e.probability(), e.direction(), opponent, e.blocked(), e.pushDirection(),
+        contacts, probabilities, e.stallCue(), e.currentCue(), e.decelCue());
   }
 }
