@@ -135,19 +135,19 @@ public final class DefenseAssist {
       lastState = State.OFF;
       return driver;
     }
-    if (blend.isOverriding(driver, controller.maxSpeed())) {
+    if (blend.isOverriding(driver, controller.maxSpeed(), controller.maxOmega())) {
       lastState = State.DRIVER_OVERRIDE;
       return driver;
     }
     if (lastTarget.isEmpty()) {
       lastState = State.SEARCHING;
       ChassisCommand search = controller.calculate(self, routeAroundObstacles(self, searchTarget(nowSec)));
-      return blend.blend(driver, search, true, controller.maxSpeed());
+      return blend.blend(driver, search, true, controller.maxSpeed(), controller.maxOmega());
     }
     boolean backing = guard != null && (guard.backingOff() || guard.blindBackingOff(nowSec));
     lastState = backing ? State.BACKING_OFF : State.ENGAGED;
     ChassisCommand assist = controller.calculate(self, routeAroundObstacles(self, lastTarget.get()));
-    return blend.blend(driver, assist, true, controller.maxSpeed());
+    return blend.blend(driver, assist, true, controller.maxSpeed(), controller.maxOmega());
   }
 
   /**
