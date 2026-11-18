@@ -59,6 +59,9 @@ public final class DefenseAssist {
   private double backoffSpeed = RulesGuard.SIM_SPEED;
   private double backoffAccel = RulesGuard.SIM_ACCEL;
   private boolean holdEnabled = false;
+  private boolean lastHolding = false;
+  private int holdSwitches = 0;
+  private final HoldLatch holdLatch = new HoldLatch();
   private int modeIndex = 0;
   private int focusOpponentId = -1; // -1 = auto
   private final TargetSelector selector = TargetSelector.defaults();
@@ -102,9 +105,22 @@ public final class DefenseAssist {
     if (focus < 0 && useThreatSelector) {
       focus = selector.select(nowSec, opponents, field.defendedGoal());
     }
-    DefenseContext ctx = new DefenseContext(nowSec, self, selfVelocity, opponents, field, focus);
-    DefenseMode mode = holdEnabled ? HoldGroundMode.wrap(activeMode()) : activeMode();
-    lastTarget = mode.compute(ctx);
+    // Hold may only push on opponents closing on us or on the goal (HoldLatch: hysteresis).
+    DefenseContext ctx = new DefenseContext(nowSec, self, selfVelocity, opponents, field, focus,
+        holdLatch.update(nowSec, self.position(), opponents, field.defendedGoal()));
+    lastTarget = activeMode().compute(ctx);
+    boolean holding = false;
+    if (holdEnabled) {
+      Optional<DefenseTarget> hold = HoldGroundMode.wrap(activeMode()).holdTarget(ctx, lastTarget);
+      holding = hold.isPresent();
+      if (holding) {
+        lastTarget = hold;
+      }
+    }
+    if (holding != lastHolding) {
+      holdSwitches++;
+    }
+    lastHolding = holding;
     // The guard runs every loop (even when not engaged) so its pin timers stay accurate.
     if (guard != null) {
       lastTarget =
@@ -248,6 +264,24 @@ public final class DefenseAssist {
 
   public boolean holdEnabled() {
     return holdEnabled;
+  }
+
+  /** True if hold ground's push target was used on the last update (before the pin guard). */
+  public boolean holding() {
+    return lastHolding;
+  }
+
+  /**
+   * How many times hold ground's push started or stopped (each on -> off and off -> on counts
+   * once), over every update so far. A measure of flicker.
+   */
+  public int holdSwitches() {
+    return holdSwitches;
+  }
+
+  /** How many times an opponent's hold permission flipped (see {@link HoldLatch}). */
+  public int holdLatchSwitches() {
+    return holdLatch.switches();
   }
 
   public void setHoldEnabled(boolean enabled) {

@@ -25,6 +25,11 @@ import java.util.Map;
  * Tracking columns (pos_rmse_m onward) are scored without ids, the same way for every tracker:
  * see {@link SimSession#matchTracks}. est_error_m and track_coverage are the older id-based
  * numbers and are empty for anonymous rows (their track ids are not opponent ids).
+ *
+ * <p>contact_s is the total time our robot touched any opponent; peak_ref_contact_s is the
+ * longest referee contact time in one pin episode (only while we drive into it);
+ * hold_switches_per_min counts hold ground's push starting or stopping;
+ * hold_latch_switches_per_min counts HoldLatch flipping an opponent's hold permission.
  */
 public final class BatchRunner {
   private BatchRunner() {}
@@ -38,7 +43,8 @@ public final class BatchRunner {
           + "false_track_s_per_min,fresh_false_track_s_per_min,coverage_opp0,coverage_opp1,"
           + "coverage_opp2,coverage_mean,partner_as_opp_s_per_min,"
           + "fresh_partner_as_opp_s_per_min,partner_contact_s,redesignations_per_min,handoffs,"
-          + "eliminations,aim_nothing_s_per_min,aim_partner_s_per_min";
+          + "eliminations,aim_nothing_s_per_min,aim_partner_s_per_min,peak_ref_contact_s,"
+          + "hold_switches_per_min,hold_latch_switches_per_min";
 
   public static void run(double seconds, int seeds, File out) throws IOException {
     File dir = out.getAbsoluteFile().getParentFile();
@@ -229,7 +235,10 @@ public final class BatchRunner {
         s.multiTracker() == null ? "" : String.valueOf(s.multiTracker().handoffs()),
         s.multiTracker() == null ? "" : String.valueOf(s.multiTracker().eliminations()),
         fmt(perMinute(s.metrics().guardingNothingSeconds(), seconds)),
-        fmt(perMinute(s.metrics().guardingPartnerSeconds(), seconds)));
+        fmt(perMinute(s.metrics().guardingPartnerSeconds(), seconds)),
+        fmt(s.world().peakRefereeContactSeconds()),
+        fmt(perMinute(s.assist().holdSwitches(), seconds)),
+        fmt(perMinute(s.assist().holdLatchSwitches(), seconds)));
   }
 
   private static double perMinute(double count, double seconds) {

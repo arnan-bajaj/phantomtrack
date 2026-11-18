@@ -227,13 +227,20 @@ class PhantomTrackTest {
 
   @Test
   void closedLoopTheAssistTracksTheGhostAndStaysInsideTheFence() {
-    // A perfect drivetrain: pose += command * dt. 60 s of Line mirror against one Cycler.
+    // A perfect drivetrain: pose += command * dt. 60 s of Line mirror (no hold) against one 1 m/s
+    // Cycler. Scored over every loop after the first 10 s (2500 loops, the scope this test had
+    // before #13), split into two numbers with their own bars; no loop is left out:
+    //   - ENGAGED (the mode is in charge): distance from the mode's target, limited to the fence.
+    //     This includes the recovery right after a back-off.
+    //   - BACKING_OFF (the pin guard is in charge): counted as time spent backing off.
     Pose pose = START;
     settle(40);
     double errSum = 0.0;
-    int errSamples = 0;
+    int engagedLoops = 0;
+    int backingOffLoops = 0;
+    int otherLoops = 0;
+    int scoredLoops = 0;
     double maxSpeed = 0.0;
-    double lastBackoffSec = Double.NEGATIVE_INFINITY;
     Geofence fence = pt.fence();
     Vec2 velocity = Vec2.ZERO; // a perfect drivetrain moves at exactly the last command
     for (int i = 0; i < 3000; i++) {
@@ -255,16 +262,11 @@ class PhantomTrackTest {
       assertTrue(p.x() <= fence.maxX() - fence.margin() + 0.0005, "east " + p);
       assertTrue(p.y() >= fence.minY() + fence.margin() - 0.0005, "south " + p);
       assertTrue(p.y() <= fence.maxY() - fence.margin() + 0.0005, "north " + p);
-      if (pt.coreState() == DefenseAssist.State.BACKING_OFF) {
-        lastBackoffSec = now();
+      if (i < 500) {
+        continue; // the first 10 s: getting into position
       }
-      // After the first 10 s, while the mode (not the pin guard) is in charge. A back-off steps
-      // the robot up to ~2 m away (EscapePlanner, to the fence at worst); getting back at the
-      // 1.0 m/s cap takes up to ~3 s, so the first 3 s after one are recovery, not tracking.
-      if (i >= 500
-          && pt.coreState() == DefenseAssist.State.ENGAGED
-          && now() - lastBackoffSec >= 3.0
-          && pt.target().isPresent()) {
+      scoredLoops++;
+      if (pt.coreState() == DefenseAssist.State.ENGAGED && pt.target().isPresent()) {
         // Where the mode wants us, limited to the fence (we can't be asked to go past it).
         Vec2 t = pt.target().get().position();
         Vec2 reachable =
@@ -272,14 +274,29 @@ class PhantomTrackTest {
                 Math.max(fence.minX() + fence.margin(), Math.min(fence.maxX() - fence.margin(), t.x())),
                 Math.max(fence.minY() + fence.margin(), Math.min(fence.maxY() - fence.margin(), t.y())));
         errSum += p.distanceTo(reachable);
-        errSamples++;
+        engagedLoops++;
+      } else if (pt.coreState() == DefenseAssist.State.BACKING_OFF) {
+        backingOffLoops++;
+      } else {
+        otherLoops++;
       }
     }
     assertTrue(maxSpeed <= 1.0 + TOL);
     assertTrue(maxSpeed > 0.5, "the assist barely moved: " + maxSpeed);
     assertEquals(0, pt.guardedId()); // the one ghost
-    double meanErr = errSum / errSamples;
-    assertTrue(meanErr < 0.25, "mean distance from the (reachable) target: " + meanErr);
+    // Every scored loop is in one of the two numbers.
+    assertEquals(2500, scoredLoops);
+    assertEquals(0, otherLoops, "loops neither engaged nor backing off");
+    assertEquals(scoredLoops, engagedLoops + backingOffLoops);
+    double meanErr = errSum / engagedLoops;
+    double backingOffFraction = (double) backingOffLoops / scoredLoops;
+    // Measured on Nov 18, 2026 (audit follow-up, item 3): mean error 0.358 m over 1864 engaged
+    // loops; backing off 636 of 2500 loops = 0.254 (12.7 s of 50 s). The bars sit just above
+    // those numbers so any regression shows. The error bar (0.38 m) is above the old 0.25 m bar
+    // because it scores every engaged loop: the old bar only held after dropping the 3 s after
+    // each back-off (37% of the samples, #13), and the back-off time was not scored at all.
+    assertTrue(meanErr < 0.38, "mean distance from the (reachable) target: " + meanErr);
+    assertTrue(backingOffFraction < 0.27, "fraction of the time backing off: " + backingOffFraction);
   }
 
   @Test

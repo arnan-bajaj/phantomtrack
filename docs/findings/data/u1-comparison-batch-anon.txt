@@ -1,0 +1,193 @@
+noisy runs paired: 1440 seeds 10 perfect runs: 36
+
+== Pooled over all camera rows: per-seed mean over the 144 setups, then mean +- SE over seeds ==
+slowed %             before   11.472 (seed sd 0.487)  after   11.351  diff   -0.121 +- 0.177 (SE)  min/max per-seed diff -0.963/+0.823
+total contact s      before   34.632 (seed sd 0.328)  after   34.121  diff   -0.511 +- 0.149 (SE)  min/max per-seed diff -1.473/+0.030
+peak ref contact s   before    2.078 (seed sd 0.045)  after    2.053  diff   -0.025 +- 0.015 (SE)  min/max per-seed diff -0.111/+0.067
+ref pins             before    0.060 (seed sd 0.014)  after    0.060  diff   +0.000 +- 0.006 (SE)  min/max per-seed diff -0.028/+0.035
+hold switches/min    before   30.717 (seed sd 0.400)  after   29.793  diff   -0.924 +- 0.114 (SE)  min/max per-seed diff -1.338/-0.187
+
+== Per setup group (camera rows, 10 seeds): slowed diff mean +- SE; flagged if |diff| > 2 SE ==
+Cycler | Cut-off + hold, locked #0 | Choke | false | Bad | Anonymous                            slowed   -1.0 +-  1.5 (before sd  3.1) contact   -3.1s peakRef +0.02s pins 1->1 holdSw/min  26.8-> 29.6 
+Cycler | Cut-off + hold, locked #0 | Choke | false | Bad | Known-ID                             slowed   -3.5 +-  0.9 (before sd  5.6) contact   +3.0s peakRef -0.08s pins 2->0 holdSw/min  38.3-> 32.3 WORSE
+Cycler | Cut-off + hold, locked #0 | Choke | false | Realistic | Anonymous                      slowed   -2.8 +-  1.8 (before sd  7.1) contact   -1.3s peakRef -0.17s pins 1->1 holdSw/min  34.0-> 33.9 
+Cycler | Cut-off + hold, locked #0 | Choke | false | Realistic | Known-ID                       slowed   -3.0 +-  2.1 (before sd  6.3) contact   -1.0s peakRef +0.04s pins 0->0 holdSw/min  29.8-> 31.7 
+Cycler | Cut-off + hold, locked #0 | Choke | true | Bad | Anonymous                             slowed   +4.2 +-  5.5 (before sd 11.8) contact   +1.3s peakRef +0.12s pins 1->2 holdSw/min  21.9-> 23.1 
+Cycler | Cut-off + hold, locked #0 | Choke | true | Bad | Known-ID                              slowed   -5.5 +-  2.0 (before sd  6.6) contact   -0.5s peakRef -0.03s pins 1->0 holdSw/min  36.5-> 33.6 WORSE
+Cycler | Cut-off + hold, locked #0 | Choke | true | Realistic | Anonymous                       slowed   -1.4 +-  2.3 (before sd  6.4) contact   +0.9s peakRef +0.07s pins 0->2 holdSw/min  36.0-> 32.6 
+Cycler | Cut-off + hold, locked #0 | Choke | true | Realistic | Known-ID                        slowed   +0.9 +-  2.7 (before sd  6.3) contact   -1.8s peakRef -0.19s pins 1->0 holdSw/min  31.8-> 30.9 
+Cycler | Cut-off + hold, locked #0 | Open | false | Bad | Anonymous                             slowed   -1.9 +-  0.6 (before sd  2.6) contact   +0.4s peakRef -0.18s pins 0->0 holdSw/min  23.8-> 20.7 WORSE
+Cycler | Cut-off + hold, locked #0 | Open | false | Bad | Known-ID                              slowed   +0.4 +-  0.7 (before sd  2.2) contact   +1.3s peakRef -0.08s pins 0->0 holdSw/min  30.7-> 33.8 
+Cycler | Cut-off + hold, locked #0 | Open | false | Realistic | Anonymous                       slowed   -1.9 +-  1.1 (before sd  2.7) contact   -1.7s peakRef +0.42s pins 0->2 holdSw/min  33.6-> 35.0 
+Cycler | Cut-off + hold, locked #0 | Open | false | Realistic | Known-ID                        slowed   +1.2 +-  1.4 (before sd  3.6) contact   +1.2s peakRef +0.29s pins 1->3 holdSw/min  24.8-> 25.1 
+Cycler | Cut-off + hold, locked #0 | Open | true | Bad | Anonymous                              slowed   +0.5 +-  1.0 (before sd  2.8) contact   +4.8s peakRef +0.21s pins 1->4 holdSw/min  18.5-> 18.5 
+Cycler | Cut-off + hold, locked #0 | Open | true | Bad | Known-ID                               slowed   +0.6 +-  1.2 (before sd  2.9) contact   +0.9s peakRef -0.21s pins 1->0 holdSw/min  28.3-> 29.9 
+Cycler | Cut-off + hold, locked #0 | Open | true | Realistic | Anonymous                        slowed   -1.4 +-  1.6 (before sd  3.3) contact   -0.7s peakRef +0.13s pins 0->0 holdSw/min  31.9-> 32.3 
+Cycler | Cut-off + hold, locked #0 | Open | true | Realistic | Known-ID                         slowed   -0.7 +-  1.3 (before sd  3.3) contact   +1.0s peakRef +0.02s pins 0->0 holdSw/min  26.1-> 27.9 
+Cycler | Cut-off + hold, locked #0 | Two lanes | false | Bad | Anonymous                        slowed   +7.0 +-  2.0 (before sd  3.6) contact   +3.5s peakRef -0.10s pins 0->0 holdSw/min  18.7-> 20.6 better
+Cycler | Cut-off + hold, locked #0 | Two lanes | false | Bad | Known-ID                         slowed   +2.6 +-  4.1 (before sd  8.6) contact   +1.2s peakRef -0.11s pins 0->0 holdSw/min  29.2-> 27.8 
+Cycler | Cut-off + hold, locked #0 | Two lanes | false | Realistic | Anonymous                  slowed   -0.7 +-  4.8 (before sd 12.2) contact   +1.0s peakRef -0.17s pins 4->2 holdSw/min  36.1-> 43.0 
+Cycler | Cut-off + hold, locked #0 | Two lanes | false | Realistic | Known-ID                   slowed   +3.5 +-  4.5 (before sd  6.3) contact   -3.0s peakRef -0.37s pins 1->0 holdSw/min  44.4-> 52.1 
+Cycler | Cut-off + hold, locked #0 | Two lanes | true | Bad | Anonymous                         slowed   +3.2 +-  1.1 (before sd  3.2) contact   +0.6s peakRef +0.13s pins 0->1 holdSw/min  19.3-> 15.7 better
+Cycler | Cut-off + hold, locked #0 | Two lanes | true | Bad | Known-ID                          slowed   -0.5 +-  1.9 (before sd  4.4) contact   -5.8s peakRef -0.11s pins 1->1 holdSw/min  28.3-> 23.7 
+Cycler | Cut-off + hold, locked #0 | Two lanes | true | Realistic | Anonymous                   slowed   +3.4 +-  2.8 (before sd  3.2) contact   -2.5s peakRef +0.23s pins 2->6 holdSw/min  39.1-> 36.4 
+Cycler | Cut-off + hold, locked #0 | Two lanes | true | Realistic | Known-ID                    slowed   +0.0 +-  1.8 (before sd  5.2) contact   -4.0s peakRef -0.20s pins 1->0 holdSw/min  37.9-> 38.1 
+Cycler | Line mirror + hold, auto=threat | Choke | false | Bad | Anonymous                      slowed   -0.3 +-  0.9 (before sd  2.5) contact   -0.7s peakRef +0.03s pins 3->3 holdSw/min  31.9-> 28.3 
+Cycler | Line mirror + hold, auto=threat | Choke | false | Bad | Known-ID                       slowed   +0.5 +-  0.8 (before sd  1.6) contact   +2.2s peakRef -0.00s pins 1->1 holdSw/min  36.9-> 36.5 
+Cycler | Line mirror + hold, auto=threat | Choke | false | Realistic | Anonymous                slowed   +0.2 +-  1.0 (before sd  2.0) contact   +3.0s peakRef +0.31s pins 0->1 holdSw/min  39.6-> 37.5 
+Cycler | Line mirror + hold, auto=threat | Choke | false | Realistic | Known-ID                 slowed   -1.4 +-  0.8 (before sd  1.7) contact   +0.4s peakRef -0.20s pins 0->0 holdSw/min  33.7-> 32.0 
+Cycler | Line mirror + hold, auto=threat | Choke | true | Bad | Anonymous                       slowed   -3.2 +-  1.7 (before sd  3.9) contact   -2.1s peakRef -0.27s pins 5->3 holdSw/min  32.6-> 28.6 
+Cycler | Line mirror + hold, auto=threat | Choke | true | Bad | Known-ID                        slowed   -1.6 +-  1.7 (before sd  6.4) contact   -2.1s peakRef -0.03s pins 1->0 holdSw/min  41.3-> 37.1 
+Cycler | Line mirror + hold, auto=threat | Choke | true | Realistic | Anonymous                 slowed   -0.8 +-  2.2 (before sd  4.4) contact   -3.9s peakRef -0.00s pins 1->1 holdSw/min  36.8-> 34.4 
+Cycler | Line mirror + hold, auto=threat | Choke | true | Realistic | Known-ID                  slowed   -2.8 +-  2.7 (before sd  8.2) contact   -0.9s peakRef -0.08s pins 0->0 holdSw/min  32.3-> 31.3 
+Cycler | Line mirror + hold, auto=threat | Open | false | Bad | Anonymous                       slowed   +0.7 +-  0.7 (before sd  1.5) contact   -0.3s peakRef +0.08s pins 1->1 holdSw/min  30.1-> 28.6 
+Cycler | Line mirror + hold, auto=threat | Open | false | Bad | Known-ID                        slowed   +1.6 +-  0.4 (before sd  1.2) contact   +3.5s peakRef +0.13s pins 1->1 holdSw/min  35.6-> 37.9 better
+Cycler | Line mirror + hold, auto=threat | Open | false | Realistic | Anonymous                 slowed   -0.3 +-  0.6 (before sd  1.9) contact   +0.3s peakRef +0.14s pins 2->1 holdSw/min  37.4-> 34.0 
+Cycler | Line mirror + hold, auto=threat | Open | false | Realistic | Known-ID                  slowed   +0.0 +-  1.0 (before sd  1.1) contact   -1.1s peakRef -0.24s pins 1->0 holdSw/min  27.9-> 25.2 
+Cycler | Line mirror + hold, auto=threat | Open | true | Bad | Anonymous                        slowed   +0.9 +-  0.6 (before sd  1.3) contact   -0.8s peakRef +0.18s pins 0->0 holdSw/min  30.2-> 27.9 
+Cycler | Line mirror + hold, auto=threat | Open | true | Bad | Known-ID                         slowed   +0.3 +-  0.9 (before sd  2.0) contact   +0.4s peakRef +0.28s pins 0->3 holdSw/min  37.2-> 36.2 
+Cycler | Line mirror + hold, auto=threat | Open | true | Realistic | Anonymous                  slowed   +0.5 +-  0.6 (before sd  1.3) contact   +0.8s peakRef -0.25s pins 1->0 holdSw/min  34.6-> 30.1 
+Cycler | Line mirror + hold, auto=threat | Open | true | Realistic | Known-ID                   slowed   +0.2 +-  0.8 (before sd  1.4) contact   +0.8s peakRef +0.11s pins 0->0 holdSw/min  30.0-> 27.5 
+Cycler | Line mirror + hold, auto=threat | Two lanes | false | Bad | Anonymous                  slowed   -1.7 +-  1.1 (before sd  2.7) contact   -2.5s peakRef +0.00s pins 1->1 holdSw/min  28.8-> 24.8 
+Cycler | Line mirror + hold, auto=threat | Two lanes | false | Bad | Known-ID                   slowed   +2.0 +-  0.9 (before sd  3.6) contact   +0.7s peakRef +0.10s pins 1->3 holdSw/min  33.2-> 32.0 better
+Cycler | Line mirror + hold, auto=threat | Two lanes | false | Realistic | Anonymous            slowed   -1.2 +-  2.7 (before sd  4.7) contact   -1.7s peakRef -0.47s pins 2->1 holdSw/min  42.0-> 41.0 
+Cycler | Line mirror + hold, auto=threat | Two lanes | false | Realistic | Known-ID             slowed   -1.5 +-  2.0 (before sd  6.8) contact   +0.3s peakRef +0.49s pins 0->2 holdSw/min  37.9-> 41.5 
+Cycler | Line mirror + hold, auto=threat | Two lanes | true | Bad | Anonymous                   slowed   -1.2 +-  0.8 (before sd  4.1) contact   -4.3s peakRef -0.08s pins 1->0 holdSw/min  27.4-> 21.8 
+Cycler | Line mirror + hold, auto=threat | Two lanes | true | Bad | Known-ID                    slowed   +0.3 +-  1.2 (before sd  1.8) contact   -2.4s peakRef -0.06s pins 0->0 holdSw/min  33.6-> 32.6 
+Cycler | Line mirror + hold, auto=threat | Two lanes | true | Realistic | Anonymous             slowed   -0.5 +-  1.2 (before sd  3.6) contact   +1.8s peakRef +0.21s pins 2->2 holdSw/min  38.4-> 39.2 
+Cycler | Line mirror + hold, auto=threat | Two lanes | true | Realistic | Known-ID              slowed   -1.0 +-  0.9 (before sd  1.8) contact   +1.1s peakRef +0.20s pins 0->0 holdSw/min  42.9-> 34.5 
+Cycler | Line mirror + hold, locked #0 | Choke | false | Bad | Anonymous                        slowed   -1.2 +-  0.8 (before sd  2.2) contact   -2.7s peakRef +0.01s pins 1->0 holdSw/min  17.6-> 15.6 
+Cycler | Line mirror + hold, locked #0 | Choke | false | Bad | Known-ID                         slowed   -0.4 +-  0.8 (before sd  2.3) contact   -2.1s peakRef -0.61s pins 4->1 holdSw/min  25.5-> 27.7 
+Cycler | Line mirror + hold, locked #0 | Choke | false | Realistic | Anonymous                  slowed   +1.5 +-  2.4 (before sd  4.3) contact   -1.5s peakRef +0.05s pins 1->1 holdSw/min  33.8-> 32.0 
+Cycler | Line mirror + hold, locked #0 | Choke | false | Realistic | Known-ID                   slowed   +0.9 +-  3.6 (before sd  5.3) contact   -1.6s peakRef -0.10s pins 0->0 holdSw/min  27.2-> 27.2 
+Cycler | Line mirror + hold, locked #0 | Choke | true | Bad | Anonymous                         slowed   +0.1 +-  3.1 (before sd  7.3) contact   -2.8s peakRef +0.06s pins 1->1 holdSw/min  18.7-> 18.2 
+Cycler | Line mirror + hold, locked #0 | Choke | true | Bad | Known-ID                          slowed   -3.0 +-  3.0 (before sd  6.3) contact   -2.0s peakRef +0.01s pins 0->0 holdSw/min  30.6-> 29.6 
+Cycler | Line mirror + hold, locked #0 | Choke | true | Realistic | Anonymous                   slowed   +2.5 +-  2.8 (before sd  7.5) contact   +1.4s peakRef -0.11s pins 2->2 holdSw/min  29.6-> 28.9 
+Cycler | Line mirror + hold, locked #0 | Choke | true | Realistic | Known-ID                    slowed   -0.2 +-  1.1 (before sd  6.1) contact   -1.1s peakRef +0.06s pins 0->1 holdSw/min  27.3-> 28.8 
+Cycler | Line mirror + hold, locked #0 | Open | false | Bad | Anonymous                         slowed   -1.3 +-  0.6 (before sd  1.9) contact   -1.8s peakRef -0.14s pins 1->1 holdSw/min  17.9-> 15.7 WORSE
+Cycler | Line mirror + hold, locked #0 | Open | false | Bad | Known-ID                          slowed   -0.4 +-  1.2 (before sd  2.0) contact   +2.4s peakRef -0.05s pins 0->0 holdSw/min  28.5-> 26.2 
+Cycler | Line mirror + hold, locked #0 | Open | false | Realistic | Anonymous                   slowed   -0.7 +-  0.6 (before sd  1.3) contact   -0.1s peakRef -0.06s pins 0->0 holdSw/min  34.1-> 32.7 
+Cycler | Line mirror + hold, locked #0 | Open | false | Realistic | Known-ID                    slowed   -0.1 +-  1.0 (before sd  1.9) contact   -0.8s peakRef +0.00s pins 0->0 holdSw/min  22.6-> 21.6 
+Cycler | Line mirror + hold, locked #0 | Open | true | Bad | Anonymous                          slowed   -2.0 +-  1.2 (before sd  3.9) contact   +1.7s peakRef +0.06s pins 0->0 holdSw/min  16.1-> 13.9 
+Cycler | Line mirror + hold, locked #0 | Open | true | Bad | Known-ID                           slowed   -0.0 +-  1.0 (before sd  1.7) contact   -1.4s peakRef +0.00s pins 0->0 holdSw/min  24.3-> 25.0 
+Cycler | Line mirror + hold, locked #0 | Open | true | Realistic | Anonymous                    slowed   +1.0 +-  0.9 (before sd  3.3) contact   -0.1s peakRef +0.12s pins 0->0 holdSw/min  32.5-> 31.2 
+Cycler | Line mirror + hold, locked #0 | Open | true | Realistic | Known-ID                     slowed   -0.2 +-  1.1 (before sd  2.9) contact   -1.5s peakRef +0.00s pins 0->0 holdSw/min  23.7-> 23.1 
+Cycler | Line mirror + hold, locked #0 | Two lanes | false | Bad | Anonymous                    slowed   -0.7 +-  3.5 (before sd  8.8) contact   -1.9s peakRef +0.12s pins 0->0 holdSw/min  14.1-> 12.3 
+Cycler | Line mirror + hold, locked #0 | Two lanes | false | Bad | Known-ID                     slowed   -2.9 +-  2.2 (before sd  7.3) contact   -2.6s peakRef -0.30s pins 1->0 holdSw/min  23.6-> 23.0 
+Cycler | Line mirror + hold, locked #0 | Two lanes | false | Realistic | Anonymous              slowed   +0.2 +-  2.8 (before sd  4.0) contact   -0.8s peakRef -0.20s pins 2->1 holdSw/min  42.1-> 44.2 
+Cycler | Line mirror + hold, locked #0 | Two lanes | false | Realistic | Known-ID               slowed   -3.3 +-  2.5 (before sd  5.3) contact   -4.6s peakRef -0.31s pins 2->0 holdSw/min  43.2-> 48.0 
+Cycler | Line mirror + hold, locked #0 | Two lanes | true | Bad | Anonymous                     slowed   +1.5 +-  1.4 (before sd  3.0) contact   +0.9s peakRef -0.29s pins 0->0 holdSw/min  13.1-> 13.3 
+Cycler | Line mirror + hold, locked #0 | Two lanes | true | Bad | Known-ID                      slowed   -1.1 +-  1.7 (before sd  5.7) contact   -2.2s peakRef -0.09s pins 0->0 holdSw/min  24.8-> 20.9 
+Cycler | Line mirror + hold, locked #0 | Two lanes | true | Realistic | Anonymous               slowed   -0.0 +-  1.1 (before sd  4.0) contact   -2.2s peakRef +0.02s pins 0->1 holdSw/min  42.5-> 40.7 
+Cycler | Line mirror + hold, locked #0 | Two lanes | true | Realistic | Known-ID                slowed   +1.8 +-  2.3 (before sd  3.4) contact   -2.5s peakRef +0.19s pins 0->1 holdSw/min  44.5-> 45.4 
+Evader | Cut-off + hold, locked #0 | Choke | false | Bad | Anonymous                            slowed   -1.2 +-  1.3 (before sd  3.7) contact   -1.1s peakRef -0.11s pins 0->1 holdSw/min  31.7-> 28.3 
+Evader | Cut-off + hold, locked #0 | Choke | false | Bad | Known-ID                             slowed   -1.0 +-  2.3 (before sd  3.7) contact   -0.2s peakRef -0.04s pins 0->0 holdSw/min  36.1-> 39.7 
+Evader | Cut-off + hold, locked #0 | Choke | false | Realistic | Anonymous                      slowed   +3.4 +-  2.9 (before sd  4.9) contact   -0.4s peakRef -0.29s pins 1->0 holdSw/min  44.6-> 48.4 
+Evader | Cut-off + hold, locked #0 | Choke | false | Realistic | Known-ID                       slowed   -1.3 +-  2.4 (before sd  7.1) contact   +0.4s peakRef +0.04s pins 1->1 holdSw/min  44.1-> 46.1 
+Evader | Cut-off + hold, locked #0 | Choke | true | Bad | Anonymous                             slowed   +1.5 +-  7.4 (before sd 12.0) contact   -2.1s peakRef -0.48s pins 0->0 holdSw/min  27.6-> 24.7 
+Evader | Cut-off + hold, locked #0 | Choke | true | Bad | Known-ID                              slowed   +0.5 +-  2.7 (before sd  9.2) contact   +0.7s peakRef -0.20s pins 1->0 holdSw/min  37.0-> 39.3 
+Evader | Cut-off + hold, locked #0 | Choke | true | Realistic | Anonymous                       slowed  -12.1 +-  6.8 (before sd 22.1) contact   -9.9s peakRef -0.69s pins 4->1 holdSw/min  37.6-> 44.5 
+Evader | Cut-off + hold, locked #0 | Choke | true | Realistic | Known-ID                        slowed   -1.7 +- 11.0 (before sd 26.6) contact   +5.7s peakRef -0.01s pins 0->1 holdSw/min  40.1-> 41.8 
+Evader | Cut-off + hold, locked #0 | Open | false | Bad | Anonymous                             slowed   +0.9 +-  0.6 (before sd  2.3) contact   -1.0s peakRef -0.15s pins 0->0 holdSw/min  21.8-> 19.7 
+Evader | Cut-off + hold, locked #0 | Open | false | Bad | Known-ID                              slowed   +1.1 +-  0.6 (before sd  1.7) contact   -0.0s peakRef +0.26s pins 0->0 holdSw/min  24.1-> 25.4 
+Evader | Cut-off + hold, locked #0 | Open | false | Realistic | Anonymous                       slowed   -0.4 +-  0.9 (before sd  1.9) contact   +0.4s peakRef +0.17s pins 0->0 holdSw/min  38.3-> 39.3 
+Evader | Cut-off + hold, locked #0 | Open | false | Realistic | Known-ID                        slowed   -0.1 +-  0.9 (before sd  2.4) contact   +0.2s peakRef -0.08s pins 0->0 holdSw/min  26.1-> 25.8 
+Evader | Cut-off + hold, locked #0 | Open | true | Bad | Anonymous                              slowed   -1.2 +-  1.0 (before sd  3.2) contact   -0.4s peakRef -0.18s pins 0->0 holdSw/min  16.3-> 15.1 
+Evader | Cut-off + hold, locked #0 | Open | true | Bad | Known-ID                               slowed   -0.9 +-  0.9 (before sd  3.0) contact   -0.2s peakRef +0.08s pins 0->0 holdSw/min  22.8-> 21.9 
+Evader | Cut-off + hold, locked #0 | Open | true | Realistic | Anonymous                        slowed   +1.2 +-  1.2 (before sd  2.8) contact   +0.4s peakRef +0.03s pins 0->0 holdSw/min  38.9-> 37.0 
+Evader | Cut-off + hold, locked #0 | Open | true | Realistic | Known-ID                         slowed   -0.7 +-  0.7 (before sd  1.9) contact   +0.1s peakRef -0.05s pins 0->0 holdSw/min  25.4-> 25.9 
+Evader | Cut-off + hold, locked #0 | Two lanes | false | Bad | Anonymous                        slowed   +3.5 +-  2.0 (before sd  6.2) contact   +0.6s peakRef +0.10s pins 0->0 holdSw/min  14.6-> 16.4 
+Evader | Cut-off + hold, locked #0 | Two lanes | false | Bad | Known-ID                         slowed   -0.4 +-  2.7 (before sd  4.9) contact   +0.8s peakRef +0.22s pins 0->0 holdSw/min  19.5-> 20.1 
+Evader | Cut-off + hold, locked #0 | Two lanes | false | Realistic | Anonymous                  slowed   +3.5 +-  2.8 (before sd  6.5) contact   -2.8s peakRef -0.01s pins 0->0 holdSw/min  31.8-> 30.9 
+Evader | Cut-off + hold, locked #0 | Two lanes | false | Realistic | Known-ID                   slowed   +0.6 +-  2.8 (before sd  5.1) contact   -3.8s peakRef -0.20s pins 1->0 holdSw/min  31.3-> 31.7 
+Evader | Cut-off + hold, locked #0 | Two lanes | true | Bad | Anonymous                         slowed   +1.8 +-  1.9 (before sd  4.8) contact   +0.8s peakRef +0.13s pins 0->0 holdSw/min  13.6-> 14.4 
+Evader | Cut-off + hold, locked #0 | Two lanes | true | Bad | Known-ID                          slowed   +0.8 +-  2.4 (before sd  5.8) contact   -0.7s peakRef -0.08s pins 0->0 holdSw/min  21.2-> 20.3 
+Evader | Cut-off + hold, locked #0 | Two lanes | true | Realistic | Anonymous                   slowed   -3.3 +-  2.2 (before sd  5.3) contact   -4.0s peakRef -0.01s pins 0->0 holdSw/min  29.9-> 32.5 
+Evader | Cut-off + hold, locked #0 | Two lanes | true | Realistic | Known-ID                    slowed   +0.6 +-  3.4 (before sd  5.1) contact   -5.7s peakRef -0.37s pins 1->0 holdSw/min  33.5-> 32.4 
+Evader | Line mirror + hold, auto=threat | Choke | false | Bad | Anonymous                      slowed   -2.4 +-  1.7 (before sd  4.2) contact   -1.3s peakRef -0.14s pins 1->2 holdSw/min  32.1-> 30.7 
+Evader | Line mirror + hold, auto=threat | Choke | false | Bad | Known-ID                       slowed   +0.4 +-  1.0 (before sd  2.2) contact   -0.5s peakRef -0.14s pins 4->2 holdSw/min  45.0-> 42.7 
+Evader | Line mirror + hold, auto=threat | Choke | false | Realistic | Anonymous                slowed   -0.5 +-  1.9 (before sd  2.8) contact   -1.3s peakRef -0.14s pins 1->1 holdSw/min  44.5-> 39.6 
+Evader | Line mirror + hold, auto=threat | Choke | false | Realistic | Known-ID                 slowed   +0.1 +-  1.9 (before sd  4.4) contact   +1.3s peakRef +0.08s pins 0->0 holdSw/min  41.1-> 35.1 
+Evader | Line mirror + hold, auto=threat | Choke | true | Bad | Anonymous                       slowed   +4.6 +-  6.2 (before sd  7.4) contact   -4.9s peakRef -0.06s pins 2->1 holdSw/min  37.8-> 31.1 
+Evader | Line mirror + hold, auto=threat | Choke | true | Bad | Known-ID                        slowed   +2.1 +-  2.1 (before sd  6.3) contact   +1.3s peakRef +0.10s pins 2->1 holdSw/min  40.2-> 38.7 
+Evader | Line mirror + hold, auto=threat | Choke | true | Realistic | Anonymous                 slowed   -0.8 +-  1.7 (before sd  7.0) contact   -0.7s peakRef +0.20s pins 0->2 holdSw/min  42.3-> 40.2 
+Evader | Line mirror + hold, auto=threat | Choke | true | Realistic | Known-ID                  slowed  +10.6 +-  3.3 (before sd  5.5) contact   +4.0s peakRef -0.05s pins 0->0 holdSw/min  34.5-> 35.0 better
+Evader | Line mirror + hold, auto=threat | Open | false | Bad | Anonymous                       slowed   +0.1 +-  0.6 (before sd  1.1) contact   -1.1s peakRef -0.12s pins 0->0 holdSw/min  25.7-> 25.3 
+Evader | Line mirror + hold, auto=threat | Open | false | Bad | Known-ID                        slowed   +0.3 +-  0.5 (before sd  1.2) contact   +0.5s peakRef -0.01s pins 0->0 holdSw/min  35.9-> 33.1 
+Evader | Line mirror + hold, auto=threat | Open | false | Realistic | Anonymous                 slowed   -0.2 +-  0.9 (before sd  1.8) contact   -0.6s peakRef -0.14s pins 0->0 holdSw/min  38.0-> 36.5 
+Evader | Line mirror + hold, auto=threat | Open | false | Realistic | Known-ID                  slowed   +0.9 +-  0.6 (before sd  1.4) contact   +0.1s peakRef +0.14s pins 0->0 holdSw/min  36.2-> 36.1 
+Evader | Line mirror + hold, auto=threat | Open | true | Bad | Anonymous                        slowed   -0.2 +-  0.9 (before sd  1.7) contact   +0.9s peakRef -0.11s pins 0->0 holdSw/min  25.2-> 25.9 
+Evader | Line mirror + hold, auto=threat | Open | true | Bad | Known-ID                         slowed   -0.3 +-  0.6 (before sd  1.3) contact   -1.0s peakRef +0.18s pins 0->0 holdSw/min  30.9-> 29.9 
+Evader | Line mirror + hold, auto=threat | Open | true | Realistic | Anonymous                  slowed   -1.3 +-  0.5 (before sd  1.2) contact   -1.3s peakRef -0.00s pins 0->0 holdSw/min  39.3-> 34.0 WORSE
+Evader | Line mirror + hold, auto=threat | Open | true | Realistic | Known-ID                   slowed   +1.1 +-  1.0 (before sd  2.1) contact   +1.0s peakRef -0.09s pins 0->0 holdSw/min  35.5-> 32.9 
+Evader | Line mirror + hold, auto=threat | Two lanes | false | Bad | Anonymous                  slowed   -1.2 +-  0.9 (before sd  2.1) contact   -0.3s peakRef +0.10s pins 0->1 holdSw/min  26.8-> 23.4 
+Evader | Line mirror + hold, auto=threat | Two lanes | false | Bad | Known-ID                   slowed   +0.9 +-  1.8 (before sd  3.6) contact   +0.1s peakRef -0.29s pins 0->0 holdSw/min  30.8-> 29.9 
+Evader | Line mirror + hold, auto=threat | Two lanes | false | Realistic | Anonymous            slowed   -1.3 +-  1.3 (before sd  3.1) contact   +0.0s peakRef -0.09s pins 0->0 holdSw/min  40.5-> 33.7 
+Evader | Line mirror + hold, auto=threat | Two lanes | false | Realistic | Known-ID             slowed   -1.2 +-  2.1 (before sd  5.5) contact   +1.5s peakRef +0.09s pins 0->0 holdSw/min  32.6-> 27.4 
+Evader | Line mirror + hold, auto=threat | Two lanes | true | Bad | Anonymous                   slowed   +1.2 +-  2.9 (before sd  3.8) contact   +0.3s peakRef -0.33s pins 0->0 holdSw/min  26.8-> 23.8 
+Evader | Line mirror + hold, auto=threat | Two lanes | true | Bad | Known-ID                    slowed   -0.9 +-  1.7 (before sd  4.9) contact   -0.6s peakRef +0.01s pins 1->1 holdSw/min  34.0-> 31.0 
+Evader | Line mirror + hold, auto=threat | Two lanes | true | Realistic | Anonymous             slowed   +1.1 +-  1.7 (before sd  3.4) contact   +2.6s peakRef +0.26s pins 0->2 holdSw/min  40.8-> 35.6 
+Evader | Line mirror + hold, auto=threat | Two lanes | true | Realistic | Known-ID              slowed   +1.6 +-  1.6 (before sd  3.4) contact   +1.8s peakRef -0.17s pins 1->0 holdSw/min  38.4-> 31.0 
+Evader | Line mirror + hold, locked #0 | Choke | false | Bad | Anonymous                        slowed   +1.4 +-  1.0 (before sd  2.8) contact   -0.7s peakRef -0.08s pins 1->0 holdSw/min  21.6-> 17.6 
+Evader | Line mirror + hold, locked #0 | Choke | false | Bad | Known-ID                         slowed   -2.2 +-  3.1 (before sd  6.1) contact   -0.2s peakRef +0.30s pins 0->0 holdSw/min  30.1-> 33.0 
+Evader | Line mirror + hold, locked #0 | Choke | false | Realistic | Anonymous                  slowed   -4.9 +-  3.8 (before sd  8.7) contact   -0.3s peakRef -0.23s pins 3->2 holdSw/min  39.3-> 35.9 
+Evader | Line mirror + hold, locked #0 | Choke | false | Realistic | Known-ID                   slowed   -4.1 +-  2.8 (before sd  9.0) contact   -1.6s peakRef -0.01s pins 1->0 holdSw/min  31.6-> 34.1 
+Evader | Line mirror + hold, locked #0 | Choke | true | Bad | Anonymous                         slowed   +1.8 +-  2.4 (before sd  7.6) contact   +2.2s peakRef +0.20s pins 0->1 holdSw/min  18.7-> 20.4 
+Evader | Line mirror + hold, locked #0 | Choke | true | Bad | Known-ID                          slowed   +0.6 +-  2.8 (before sd  4.2) contact   -1.4s peakRef +0.01s pins 0->0 holdSw/min  35.2-> 33.4 
+Evader | Line mirror + hold, locked #0 | Choke | true | Realistic | Anonymous                   slowed   -4.7 +-  2.2 (before sd  8.6) contact   -5.6s peakRef +0.41s pins 0->2 holdSw/min  34.3-> 35.8 WORSE
+Evader | Line mirror + hold, locked #0 | Choke | true | Realistic | Known-ID                    slowed   -2.2 +-  4.1 (before sd 13.9) contact   +2.9s peakRef +0.34s pins 0->3 holdSw/min  31.4-> 30.1 
+Evader | Line mirror + hold, locked #0 | Open | false | Bad | Anonymous                         slowed   -1.0 +-  1.0 (before sd  2.1) contact   -0.2s peakRef +0.14s pins 0->0 holdSw/min  14.1-> 16.3 
+Evader | Line mirror + hold, locked #0 | Open | false | Bad | Known-ID                          slowed   -1.0 +-  0.6 (before sd  1.7) contact   -1.6s peakRef -0.24s pins 0->0 holdSw/min  24.9-> 25.5 
+Evader | Line mirror + hold, locked #0 | Open | false | Realistic | Anonymous                   slowed   -0.3 +-  1.0 (before sd  2.0) contact   -0.7s peakRef +0.06s pins 0->0 holdSw/min  34.6-> 33.1 
+Evader | Line mirror + hold, locked #0 | Open | false | Realistic | Known-ID                    slowed   +0.4 +-  1.2 (before sd  2.4) contact   +0.4s peakRef +0.10s pins 0->0 holdSw/min  32.1-> 28.6 
+Evader | Line mirror + hold, locked #0 | Open | true | Bad | Anonymous                          slowed   +0.5 +-  0.7 (before sd  2.3) contact   +0.7s peakRef +0.01s pins 1->0 holdSw/min  10.2-> 11.5 
+Evader | Line mirror + hold, locked #0 | Open | true | Bad | Known-ID                           slowed   +0.2 +-  0.9 (before sd  2.3) contact   -0.5s peakRef +0.01s pins 0->0 holdSw/min  22.0-> 19.9 
+Evader | Line mirror + hold, locked #0 | Open | true | Realistic | Anonymous                    slowed   -0.5 +-  1.1 (before sd  2.8) contact   +0.1s peakRef +0.11s pins 0->0 holdSw/min  34.8-> 32.0 
+Evader | Line mirror + hold, locked #0 | Open | true | Realistic | Known-ID                     slowed   -0.6 +-  2.9 (before sd  4.3) contact   +0.9s peakRef +0.01s pins 0->0 holdSw/min  32.6-> 31.1 
+Evader | Line mirror + hold, locked #0 | Two lanes | false | Bad | Anonymous                    slowed   +2.9 +-  3.0 (before sd  6.1) contact   -2.0s peakRef -0.20s pins 0->0 holdSw/min  13.1-> 13.5 
+Evader | Line mirror + hold, locked #0 | Two lanes | false | Bad | Known-ID                     slowed   +0.6 +-  1.8 (before sd  4.9) contact   +0.7s peakRef -0.11s pins 0->0 holdSw/min  20.6-> 19.5 
+Evader | Line mirror + hold, locked #0 | Two lanes | false | Realistic | Anonymous              slowed   +3.2 +-  2.6 (before sd  8.6) contact   +0.2s peakRef +0.21s pins 0->2 holdSw/min  32.7-> 32.7 
+Evader | Line mirror + hold, locked #0 | Two lanes | false | Realistic | Known-ID               slowed   +1.1 +-  3.1 (before sd  8.6) contact   -1.6s peakRef -0.08s pins 0->0 holdSw/min  32.3-> 30.6 
+Evader | Line mirror + hold, locked #0 | Two lanes | true | Bad | Anonymous                     slowed   +1.3 +-  1.2 (before sd  5.2) contact   +2.0s peakRef +0.15s pins 0->0 holdSw/min  12.7-> 13.1 
+Evader | Line mirror + hold, locked #0 | Two lanes | true | Bad | Known-ID                      slowed   -1.9 +-  2.3 (before sd  6.0) contact   -1.5s peakRef -0.18s pins 0->0 holdSw/min  22.3-> 21.2 
+Evader | Line mirror + hold, locked #0 | Two lanes | true | Realistic | Anonymous               slowed   +0.7 +-  3.1 (before sd  5.7) contact   -0.6s peakRef -0.11s pins 1->1 holdSw/min  31.4-> 33.2 
+Evader | Line mirror + hold, locked #0 | Two lanes | true | Realistic | Known-ID                slowed   -3.3 +-  2.4 (before sd  8.3) contact   -3.0s peakRef -0.43s pins 1->0 holdSw/min  32.4-> 29.8 
+groups worse beyond 2 SE: 6, better beyond 2 SE: 5, of 144
+
+== Perfect tracking (deterministic, single runs) ==
+Cycler | Cut-off + hold, locked #0 | Choke | false                     slowed  +33.9 ->  +34.2  contact   67.3 ->   66.1  peakRef 1.96 -> 1.94  pins 0->0  holdSw/min  20.0 ->  18.7
+Cycler | Cut-off + hold, locked #0 | Choke | true                      slowed  +36.2 ->  +28.9  contact   61.5 ->   64.4  peakRef 1.94 -> 1.94  pins 0->0  holdSw/min  22.0 ->  20.7
+Cycler | Cut-off + hold, locked #0 | Open | false                      slowed  +35.3 ->  +38.3  contact   56.3 ->   60.0  peakRef 1.94 -> 1.94  pins 0->0  holdSw/min  24.0 ->  24.3
+Cycler | Cut-off + hold, locked #0 | Open | true                       slowed  +33.7 ->  +31.3  contact   52.4 ->   52.2  peakRef 1.94 -> 1.94  pins 0->0  holdSw/min  20.7 ->  23.3
+Cycler | Cut-off + hold, locked #0 | Two lanes | false                 slowed  +47.1 ->  +37.9  contact   61.7 ->   57.7  peakRef 1.94 -> 1.94  pins 0->0  holdSw/min  21.3 ->  22.7
+Cycler | Cut-off + hold, locked #0 | Two lanes | true                  slowed  -13.7 ->  -14.0  contact   59.7 ->   55.7  peakRef 1.94 -> 1.94  pins 0->0  holdSw/min  22.7 ->  22.0
+Cycler | Line mirror + hold, auto=threat | Choke | false               slowed  +11.1 ->  +11.1  contact   65.0 ->   65.0  peakRef 1.94 -> 1.94  pins 0->0  holdSw/min  34.3 ->  33.7
+Cycler | Line mirror + hold, auto=threat | Choke | true                slowed  +23.5 ->  +21.2  contact   60.8 ->   62.0  peakRef 1.94 -> 1.94  pins 0->0  holdSw/min  28.0 ->  30.0
+Cycler | Line mirror + hold, auto=threat | Open | false                slowed  +10.1 ->  +13.4  contact   63.4 ->   63.4  peakRef 1.94 -> 1.94  pins 0->0  holdSw/min  35.0 ->  37.3
+Cycler | Line mirror + hold, auto=threat | Open | true                 slowed  +11.6 ->  +11.6  contact   61.5 ->   59.4  peakRef 1.94 -> 1.94  pins 0->0  holdSw/min  33.3 ->  32.7
+Cycler | Line mirror + hold, auto=threat | Two lanes | false           slowed  +17.5 ->  +19.4  contact   53.5 ->   51.7  peakRef 1.84 -> 1.94  pins 0->0  holdSw/min  29.0 ->  30.7
+Cycler | Line mirror + hold, auto=threat | Two lanes | true            slowed   -6.6 ->   -5.0  contact   51.8 ->   49.3  peakRef 1.96 -> 1.86  pins 0->0  holdSw/min  27.7 ->  25.3
+Cycler | Line mirror + hold, locked #0 | Choke | false                 slowed  +35.5 ->  +40.7  contact   64.6 ->   67.8  peakRef 1.94 -> 1.96  pins 0->0  holdSw/min  19.0 ->  15.3
+Cycler | Line mirror + hold, locked #0 | Choke | true                  slowed  +50.7 ->  +34.8  contact   56.5 ->   57.0  peakRef 1.96 -> 1.96  pins 0->0  holdSw/min  12.7 ->  16.7
+Cycler | Line mirror + hold, locked #0 | Open | false                  slowed  +26.0 ->  +28.4  contact   48.1 ->   49.0  peakRef 1.94 -> 1.94  pins 0->0  holdSw/min  15.3 ->  14.0
+Cycler | Line mirror + hold, locked #0 | Open | true                   slowed  +27.2 ->  +24.2  contact   51.2 ->   47.0  peakRef 1.94 -> 1.94  pins 0->0  holdSw/min  15.3 ->  14.0
+Cycler | Line mirror + hold, locked #0 | Two lanes | false             slowed  +26.8 ->  +49.5  contact   51.5 ->   51.5  peakRef 1.74 -> 1.94  pins 0->0  holdSw/min  16.7 ->  32.0
+Cycler | Line mirror + hold, locked #0 | Two lanes | true              slowed  -14.5 ->  -11.5  contact   52.0 ->   45.8  peakRef 1.94 -> 1.94  pins 0->0  holdSw/min  18.0 ->  26.0
+Evader | Cut-off + hold, locked #0 | Choke | false                     slowed  +36.0 ->  +29.7  contact   36.9 ->   35.1  peakRef 1.92 -> 1.72  pins 0->0  holdSw/min  30.0 ->  39.3
+Evader | Cut-off + hold, locked #0 | Choke | true                      slowed  +24.1 ->   +5.1  contact   39.2 ->   39.2  peakRef 1.96 -> 1.84  pins 0->0  holdSw/min  30.0 ->  36.3
+Evader | Cut-off + hold, locked #0 | Open | false                      slowed  +13.2 ->  +13.9  contact   22.5 ->   23.9  peakRef 1.72 -> 1.84  pins 0->0  holdSw/min  27.3 ->  27.7
+Evader | Cut-off + hold, locked #0 | Open | true                       slowed  +20.4 ->  +18.5  contact   26.8 ->   24.3  peakRef 1.94 -> 1.94  pins 0->0  holdSw/min  24.7 ->  26.0
+Evader | Cut-off + hold, locked #0 | Two lanes | false                 slowed  +18.7 ->  +18.9  contact   25.0 ->   19.5  peakRef 1.88 -> 1.80  pins 0->0  holdSw/min  30.7 ->  32.7
+Evader | Cut-off + hold, locked #0 | Two lanes | true                  slowed  +11.6 ->  +24.0  contact   26.0 ->   21.0  peakRef 1.94 -> 1.92  pins 0->0  holdSw/min  30.7 ->  36.7
+Evader | Line mirror + hold, auto=threat | Choke | false               slowed  +24.1 ->  +19.6  contact   52.7 ->   50.3  peakRef 1.96 -> 1.88  pins 0->0  holdSw/min  32.7 ->  40.7
+Evader | Line mirror + hold, auto=threat | Choke | true                slowed   +4.4 ->  +27.0  contact   45.1 ->   55.9  peakRef 1.94 -> 2.26  pins 0->0  holdSw/min  30.7 ->  33.3
+Evader | Line mirror + hold, auto=threat | Open | false                slowed  +13.0 ->  +13.0  contact   41.1 ->   41.9  peakRef 1.56 -> 1.56  pins 0->0  holdSw/min  31.3 ->  32.0
+Evader | Line mirror + hold, auto=threat | Open | true                 slowed  +15.4 ->  +13.6  contact   38.6 ->   36.5  peakRef 1.52 -> 1.80  pins 0->0  holdSw/min  26.0 ->  31.3
+Evader | Line mirror + hold, auto=threat | Two lanes | false           slowed  +23.5 ->  +21.2  contact   27.8 ->   27.8  peakRef 1.94 -> 1.38  pins 0->0  holdSw/min  21.3 ->  23.3
+Evader | Line mirror + hold, auto=threat | Two lanes | true            slowed  +22.2 ->   +7.8  contact   26.2 ->   23.7  peakRef 1.84 -> 1.86  pins 0->0  holdSw/min  21.3 ->  27.3
+Evader | Line mirror + hold, locked #0 | Choke | false                 slowed  +28.9 ->  +46.8  contact   43.1 ->   44.8  peakRef 1.96 -> 1.96  pins 0->0  holdSw/min  18.0 ->  33.0
+Evader | Line mirror + hold, locked #0 | Choke | true                  slowed  +15.0 ->  +31.2  contact   37.7 ->   42.1  peakRef 2.16 -> 1.94  pins 0->0  holdSw/min  18.0 ->  30.7
+Evader | Line mirror + hold, locked #0 | Open | false                  slowed  +39.0 ->  +35.3  contact   39.4 ->   32.3  peakRef 1.94 -> 1.66  pins 0->0  holdSw/min  14.7 ->  20.7
+Evader | Line mirror + hold, locked #0 | Open | true                   slowed  +36.7 ->  +45.4  contact   31.6 ->   36.8  peakRef 1.58 -> 1.82  pins 0->0  holdSw/min  16.3 ->  20.7
+Evader | Line mirror + hold, locked #0 | Two lanes | false             slowed  +53.8 ->  +87.5  contact   27.3 ->   28.0  peakRef 1.94 -> 1.84  pins 0->0  holdSw/min  16.0 ->  30.0
+Evader | Line mirror + hold, locked #0 | Two lanes | true              slowed  +44.1 ->  +49.4  contact   27.5 ->   29.2  peakRef 1.96 -> 1.80  pins 0->0  holdSw/min  17.3 ->  24.0

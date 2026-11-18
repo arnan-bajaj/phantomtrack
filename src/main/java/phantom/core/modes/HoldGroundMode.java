@@ -7,11 +7,18 @@ import phantom.core.tracking.TrackedRobot;
 /**
  * Wraps any mode so it stops giving ground on contact. The inner mode decides where to stand; once
  * the opponent it is reacting to is within {@code holdGap} (bumper to bumper) AND we are goal-side
- * of it, we push straight back into it instead of retreating.
+ * of it AND it is not driving away, we push straight back into it instead of retreating.
  *
  * <pre>
  *   gap      = |p_opp - p_self| - 2 * robotHalfSize
  *   hold if  gap <= holdGap  and  |p_self - goal| < |p_opp - goal|
+ *            and  opp not in ctx.holdReleased()
+ *
+ *   closing  = max(-v_opp . unit(p_opp - p_self), v_opp . unit(goal - p_opp))   (m/s)
+ *   ctx.holdReleased() = opponents whose closing speed stayed below -0.25 m/s for 0.2 s and has
+ *                        not risen above -0.10 m/s since (hysteresis, kept by HoldLatch in the
+ *                        manager; see there for why these numbers). A stalled pushing match has
+ *                        closing = 0 and keeps the hold.
  *   n        = unit(p_opp - p_self)
  *   p*       = clampInside(p_self + 0.3 * n)   (like every mode's target: pushing around a wall
  *                                              corner, p_self + 0.3 n can be inside the wall)
@@ -55,8 +62,36 @@ public final class HoldGroundMode implements DefenseMode {
   @Override
   public Optional<DefenseTarget> compute(DefenseContext ctx) {
     Optional<DefenseTarget> base = inner.compute(ctx);
+    Optional<DefenseTarget> hold = holdTarget(ctx, base);
+    return hold.isPresent() ? hold : base;
+  }
+
+  /**
+   * How fast an opponent is closing on us or on the goal, whichever is larger (m/s; negative =
+   * driving away from both):
+   *
+   * <pre>
+   *   closing = max(-v_opp . unit(p_opp - p_self), v_opp . unit(goal - p_opp))
+   * </pre>
+   *
+   * Only the opponent's own velocity counts, not ours: driving at a robot that is leaving does not
+   * make it a threat. A zero-length direction (opponent on us, or on the goal) gives 0 for that
+   * term, never NaN.
+   */
+  public static double closingSpeed(Vec2 self, Vec2 oppPos, Vec2 oppVel, Vec2 goal) {
+    double onUs = -oppVel.dot(oppPos.minus(self).normalized());
+    double onGoal = oppVel.dot(goal.minus(oppPos).normalized());
+    return Math.max(onUs, onGoal);
+  }
+
+  /**
+   * The push target if the hold rule fires for the inner mode's target {@code base}, otherwise
+   * empty (then {@link #compute} returns {@code base}). Lets the caller tell whether we are
+   * holding without computing the inner mode twice.
+   */
+  public Optional<DefenseTarget> holdTarget(DefenseContext ctx, Optional<DefenseTarget> base) {
     if (base.isEmpty() || base.get().opponentId() < 0) {
-      return base;
+      return Optional.empty();
     }
     TrackedRobot opp = null;
     for (TrackedRobot r : ctx.opponents()) {
@@ -65,19 +100,19 @@ public final class HoldGroundMode implements DefenseMode {
       }
     }
     if (opp == null) {
-      return base;
+      return Optional.empty();
     }
     Vec2 self = ctx.self().position();
     Vec2 oppPos = opp.positionAt(ctx.timeSec());
     Vec2 goal = ctx.field().defendedGoal();
     double gap = oppPos.distanceTo(self) - 2.0 * ctx.field().robotHalfSize();
     boolean goalSide = self.distanceTo(goal) < oppPos.distanceTo(goal);
-    if (gap > holdGap || !goalSide) {
-      return base;
+    if (gap > holdGap || !goalSide || ctx.holdReleased().contains(opp.id())) {
+      return Optional.empty();
     }
     Vec2 n = oppPos.minus(self).normalized();
     if (n.equals(Vec2.ZERO)) {
-      return base;
+      return Optional.empty();
     }
     return Optional.of(
         new DefenseTarget(

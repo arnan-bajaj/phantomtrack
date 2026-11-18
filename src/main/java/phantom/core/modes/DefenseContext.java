@@ -2,6 +2,7 @@ package phantom.core.modes;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import phantom.core.field.FieldConfig;
 import phantom.core.geometry.Pose;
 import phantom.core.geometry.Vec2;
@@ -16,6 +17,8 @@ import phantom.core.tracking.TrackedRobot;
  * @param opponents tracked opponents (never null)
  * @param field field geometry
  * @param focusOpponentId opponent the driver selected, or -1 to let the mode decide
+ * @param holdReleased opponents hold ground must not push on (they are driving away; see
+ *     {@code phantom.core.manager.HoldLatch}). Empty = hold may push on anyone.
  */
 public record DefenseContext(
     double timeSec,
@@ -23,7 +26,18 @@ public record DefenseContext(
     Vec2 selfVelocity,
     List<TrackedRobot> opponents,
     FieldConfig field,
-    int focusOpponentId) {
+    int focusOpponentId,
+    Set<Integer> holdReleased) {
+
+  public DefenseContext {
+    holdReleased = Set.copyOf(holdReleased);
+  }
+
+  /** A context in which hold may push on every opponent. */
+  public DefenseContext(double timeSec, Pose self, Vec2 selfVelocity, List<TrackedRobot> opponents,
+      FieldConfig field, int focusOpponentId) {
+    this(timeSec, self, selfVelocity, opponents, field, focusOpponentId, Set.of());
+  }
 
   /**
    * The driver-selected opponent if one is selected (empty if it is not currently tracked: we
