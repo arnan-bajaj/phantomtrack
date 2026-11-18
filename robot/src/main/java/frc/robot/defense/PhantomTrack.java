@@ -8,6 +8,7 @@ import phantom.core.geometry.Pose;
 import phantom.core.geometry.Vec2;
 import phantom.core.manager.DefenseAssist;
 import phantom.core.modes.DefenseTarget;
+import phantom.core.rules.DriveTelemetry;
 
 /**
  * PhantomTrack on a robot: one call per 20 ms loop, in the blue frame.
@@ -16,6 +17,13 @@ import phantom.core.modes.DefenseTarget;
  *   pose --> PoseMonitor --> SafetyGate.decide --> who drives?
  *
  *   ASSIST:      DefenseAssist (phantom.core) --> VirtualContact --> SafetyGate.filter --> command
+ *
+ *   The pin guard inside DefenseAssist gets drive telemetry every loop:
+ *     commanded = what the drivetrain was really sent last loop (after VirtualContact, the speed
+ *                 cap, the acceleration limit and the geofence)
+ *     measured  = in.velocity(),   acceleration = (measured - measured last loop) / dt
+ *   Using the assist's own wish instead would make every stop at the fence, and every capped or
+ *   rate-limited command, look like "pushing but not moving", i.e. a robot the camera cannot see.
  *   NOT_TELEOP:  STOP
  *   otherwise:   the driver's command, untouched
  *
@@ -67,6 +75,7 @@ public final class PhantomTrack {
 
   private double lastNow = Double.NaN;
   private ChassisCommand lastOutput = ChassisCommand.STOP;
+  private Vec2 lastVelocity = Vec2.ZERO; // measured, previous loop (for the acceleration)
   private SafetyGate.Decision decision = SafetyGate.Decision.NOT_TELEOP;
   private PoseMonitor.Fault currentFault = PoseMonitor.Fault.NONE;
   private boolean pinWarning = false;
@@ -130,6 +139,15 @@ public final class PhantomTrack {
       // The assist runs every loop, engaged or not, so its pin timers and target stay current.
       // When engaged the sticks are inside the deadband by definition, so it gets STOP as "the
       // driver's command" and returns its own.
+      session
+          .assist()
+          .setDriveTelemetry(
+              DriveTelemetry.fromVelocities(
+                  session.world().timeSec(),
+                  lastOutput.velocity(),
+                  in.velocity(),
+                  lastVelocity,
+                  dt));
       ChassisCommand raw =
           session
               .assist()
@@ -162,6 +180,9 @@ public final class PhantomTrack {
       }
     }
     lastOutput = out;
+    if (poseFinite) {
+      lastVelocity = in.velocity();
+    }
     return out;
   }
 

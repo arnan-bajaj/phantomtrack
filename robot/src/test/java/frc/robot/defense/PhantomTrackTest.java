@@ -10,6 +10,7 @@ import phantom.core.control.ChassisCommand;
 import phantom.core.geometry.Angles;
 import phantom.core.geometry.Pose;
 import phantom.core.geometry.Vec2;
+import phantom.core.manager.DefenseAssist;
 import phantom.sim.Scenarios;
 
 /**
@@ -232,12 +233,15 @@ class PhantomTrackTest {
     double errSum = 0.0;
     int errSamples = 0;
     double maxSpeed = 0.0;
+    double lastBackoffSec = Double.NEGATIVE_INFINITY;
     Geofence fence = pt.fence();
+    Vec2 velocity = Vec2.ZERO; // a perfect drivetrain moves at exactly the last command
     for (int i = 0; i < 3000; i++) {
       ChassisCommand out =
           pt.update(
               new PhantomTrack.Input(
-                  now(), RobotMode.TELEOP, pose, Vec2.ZERO, now(), ChassisCommand.STOP, 0.0, 1.0));
+                  now(), RobotMode.TELEOP, pose, velocity, now(), ChassisCommand.STOP, 0.0, 1.0));
+      velocity = out.velocity();
       k++;
       assertEquals(SafetyGate.Decision.ASSIST, pt.decision(), "loop " + i);
       maxSpeed = Math.max(maxSpeed, out.velocity().norm());
@@ -251,7 +255,16 @@ class PhantomTrackTest {
       assertTrue(p.x() <= fence.maxX() - fence.margin() + 0.0005, "east " + p);
       assertTrue(p.y() >= fence.minY() + fence.margin() - 0.0005, "south " + p);
       assertTrue(p.y() <= fence.maxY() - fence.margin() + 0.0005, "north " + p);
-      if (i >= 500 && pt.target().isPresent()) { // after the first 10 s
+      if (pt.coreState() == DefenseAssist.State.BACKING_OFF) {
+        lastBackoffSec = now();
+      }
+      // After the first 10 s, while the mode (not the pin guard) is in charge. A back-off steps
+      // the robot up to ~2 m away (EscapePlanner, to the fence at worst); getting back at the
+      // 1.0 m/s cap takes up to ~3 s, so the first 3 s after one are recovery, not tracking.
+      if (i >= 500
+          && pt.coreState() == DefenseAssist.State.ENGAGED
+          && now() - lastBackoffSec >= 3.0
+          && pt.target().isPresent()) {
         // Where the mode wants us, limited to the fence (we can't be asked to go past it).
         Vec2 t = pt.target().get().position();
         Vec2 reachable =
