@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import phantom.core.control.ChassisCommand;
+import phantom.core.field.FieldConfig;
 import phantom.core.geometry.Angles;
 import phantom.core.geometry.Vec2;
 
@@ -24,6 +25,25 @@ import phantom.core.geometry.Vec2;
  * An Evader also adds 4 m for every robot it sees (with its reaction delay) within 2 m of a gate,
  * so it picks the open lane. Any bot stuck at a gate for 1 s (e.g. head-on with another robot)
  * treats that gate as blocked for 3 s (+10 m) and tries another, like a driver backing out.
+ *
+ * <p><b>Head-on in a gap (Cyclers only, audit M5).</b> Two Cyclers that meet head-on inside a gap
+ * would push each other forever (equal effort stalls, and inside the gap the straight path is not
+ * blocked, so the gate rule above never runs). So: when another Cycler with a higher id is
+ * touching us (bumper gap at most 0.05 m), both are under 0.3 m/s, both drive into each other
+ * (pushing effort above 0.5, as in {@link Contact#effort}), and the midpoint of the two is within
+ * 1.0 m of a gate, for 1.0 s in a row, the lower id backs out to
+ *
+ * <pre>
+ *   u    = unit(gate - p_me)          (or unit(gate - dest_other) if we sit on the gate)
+ *   perp = (-u.y, u.x)
+ *   side = -perp if perp . (dest_other - gate) > 0, else perp   (away from where the other goes)
+ *   Y    = clampInside(gate - 1.5 u + 1.2 side)
+ * </pre>
+ *
+ * until the other has passed ({@code (p_other - p_me) . u < 0}: it is behind us, seen from the
+ * gate), or for at most 5 s. A Cycler never backs out from our robot or from a partner: driving
+ * through defenders is what it models. Evaders already have their own way out (bulldoze, gate
+ * switching) and are not changed.
  */
 public final class CyclerBehavior implements OpponentBehavior {
   private final Vec2 pickup;
@@ -48,12 +68,26 @@ public final class CyclerBehavior implements OpponentBehavior {
   private static final double CROWDED_PENALTY = 4.0;
   private static final double BLOCKED_PENALTY = 10.0;
   private static final double BLOCKED_SECONDS = 3.0;
+  // Cycler head-on yield (audit M5)
+  static final double GAP_RADIUS = 1.0;
+  static final double HEAD_ON_SECONDS = 1.0;
+  static final double HEAD_ON_EFFORT = 0.5;
+  static final double TOUCH_GAP = 0.05;
+  static final double YIELD_BACK = 1.5;
+  static final double YIELD_SIDE = 1.2;
+  static final double YIELD_MAX_SECONDS = 5.0;
   private int committedGate = -1;
   private int blockedGate = -1;
   private double blockedUntil = Double.NEGATIVE_INFINITY;
   private double gateStuckFor = 0.0;
   private double stuckFor = 0.0;
   private double bulldozeUntil = -1.0;
+  private int headOnWith = -1;
+  private double headOnFor = 0.0;
+  private int yieldingTo = -1;
+  private Vec2 yieldTarget = Vec2.ZERO;
+  private Vec2 yieldDir = Vec2.ZERO;
+  private double yieldUntil = Double.NEGATIVE_INFINITY;
 
   private boolean headingToGoal = true;
   private double dwellUntil = -1.0;
@@ -127,6 +161,13 @@ public final class CyclerBehavior implements OpponentBehavior {
 
     // Drive at the fastest speed that can still stop at the arrival radius:
     // v = sqrt(2 * a * remaining), using 80% of max accel for margin.
+    if (!evasive) {
+      ChassisCommand backOut = yieldHeadOn(t, dt, me, world);
+      if (backOut != null) {
+        return backOut;
+      }
+    }
+
     double remaining = dist - radius;
     double speed = Math.min(me.maxSpeed(), Math.sqrt(2.0 * 0.8 * me.maxAccel() * remaining));
     Vec2 aim = route(t, dt, me, world, dest);
@@ -213,6 +254,102 @@ public final class CyclerBehavior implements OpponentBehavior {
       }
     }
     return Avoidance.steer(me.position(), dest, obstacles, AVOID_RADIUS, AVOID_GAIN);
+  }
+
+  /** Where this robot is driving right now (the goal or the pickup). */
+  Vec2 destination() {
+    return headingToGoal ? goal : pickup;
+  }
+
+  /**
+   * Cycler only (audit M5): the head-on rule in the class comment. Returns the back-out command,
+   * or null to drive on as usual.
+   */
+  private ChassisCommand yieldHeadOn(double t, double dt, RobotBody me, SimWorld world) {
+    if (yieldingTo >= 0) {
+      RobotBody other = null;
+      for (SimWorld.Opponent o : world.opponents()) {
+        if (o.body().id() == yieldingTo) {
+          other = o.body();
+        }
+      }
+      boolean passed = other == null
+          || other.position().minus(me.position()).dot(yieldDir) < 0.0;
+      if (!passed && t < yieldUntil) {
+        Vec2 to = yieldTarget.minus(me.position());
+        double d = to.norm();
+        double speed = Math.min(me.maxSpeed(), Math.sqrt(2.0 * 0.8 * me.maxAccel() * d));
+        return d < 0.05 ? ChassisCommand.STOP : new ChassisCommand(to.normalized().times(speed), 0.0);
+      }
+      yieldingTo = -1;
+      headOnWith = -1;
+      headOnFor = 0.0;
+      return null;
+    }
+    // Find another Cycler stalled head-on with us inside a gap, if we are the lower id.
+    var field = world.field();
+    double touch = 2.0 * field.robotHalfSize() + TOUCH_GAP;
+    int found = -1;
+    Vec2 foundGate = null;
+    CyclerBehavior foundBehavior = null;
+    for (SimWorld.Opponent o : world.opponents()) {
+      RobotBody b = o.body();
+      if (b.id() <= me.id() || !(o.behavior() instanceof CyclerBehavior cb) || cb.evasive) {
+        continue;
+      }
+      Vec2 n = b.position().minus(me.position()).normalized();
+      if (b.position().distanceTo(me.position()) > touch
+          || me.velocity().norm() >= STUCK_SPEED
+          || b.velocity().norm() >= STUCK_SPEED
+          || Contact.effort(me.desiredVelocity(), n, me.maxSpeed()) <= HEAD_ON_EFFORT
+          || Contact.effort(b.desiredVelocity(), n.times(-1.0), b.maxSpeed()) <= HEAD_ON_EFFORT) {
+        continue;
+      }
+      Vec2 mid = me.position().plus(b.position()).times(0.5);
+      for (Vec2 g : field.gates()) {
+        if (mid.distanceTo(g) <= GAP_RADIUS) {
+          found = b.id();
+          foundGate = g;
+          foundBehavior = cb;
+        }
+      }
+      if (found >= 0) {
+        break;
+      }
+    }
+    if (found < 0) {
+      headOnWith = -1;
+      headOnFor = 0.0;
+      return null;
+    }
+    headOnFor = found == headOnWith ? headOnFor + dt : dt;
+    headOnWith = found;
+    if (headOnFor < HEAD_ON_SECONDS) {
+      return null;
+    }
+    yieldingTo = found;
+    yieldTarget = yieldPoint(me.position(), foundGate, foundBehavior.destination(), field);
+    Vec2 u = foundGate.minus(me.position()).normalized();
+    yieldDir = u.equals(Vec2.ZERO) ? foundGate.minus(foundBehavior.destination()).normalized() : u;
+    yieldUntil = t + YIELD_MAX_SECONDS;
+    return yieldHeadOn(t, dt, me, world);
+  }
+
+  /**
+   * Where a Cycler backing out of a head-on stall drives to (see class comment).
+   *
+   * @param me its position
+   * @param gate the gate it is stalled in
+   * @param otherDest where the robot it yields to is driving
+   */
+  static Vec2 yieldPoint(Vec2 me, Vec2 gate, Vec2 otherDest, FieldConfig field) {
+    Vec2 u = gate.minus(me).normalized();
+    if (u.equals(Vec2.ZERO)) {
+      u = gate.minus(otherDest).normalized(); // the other is headed for our side of the gate
+    }
+    Vec2 perp = new Vec2(-u.y(), u.x());
+    Vec2 side = perp.dot(otherDest.minus(gate)) > 0.0 ? perp.times(-1.0) : perp;
+    return field.clampInside(gate.minus(u.times(YIELD_BACK)).plus(side.times(YIELD_SIDE)));
   }
 
   private void recordScore(double t) {
