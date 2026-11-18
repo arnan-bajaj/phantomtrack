@@ -66,6 +66,7 @@ public final class EpisodeKeys {
   private boolean rebindNewIds;
   private final Map<Integer, Integer> keyOfId = new HashMap<>();
   private final Map<Integer, Vec2> lastPos = new HashMap<>();
+  private final Set<Integer> seenFresh = new HashSet<>(); // keys with at least one fresh sighting
   private final Map<Integer, Integer> aliasNow = new HashMap<>();
   private Map<Integer, Vec2> idlessLastLoop = new HashMap<>(); // key -> position
   private int nextSynthetic = SYNTHETIC_START;
@@ -197,8 +198,11 @@ public final class EpisodeKeys {
       TrackedRobot r = tracks.get(i);
       int k = keys[i];
       Vec2 p = r.positionAt(nowSec);
-      if (nowSec - r.timestampSec() <= freshSec || !lastPos.containsKey(k)) {
+      if (nowSec - r.timestampSec() <= freshSec) {
         lastPos.put(k, p);
+        seenFresh.add(k);
+      } else if (!seenFresh.contains(k)) {
+        lastPos.put(k, p); // no fresh sighting yet: the last reported position
       }
       aliasNow.put(k, ids[i] >= 0 ? ids[i] : UNKNOWN);
       if (ids[i] < 0) {
@@ -210,6 +214,7 @@ public final class EpisodeKeys {
     // Forget keys nobody can come back to: no open episode and no track behind them now.
     lastPos.keySet().removeIf(k -> !episodeOpen.test(k) && !aliasNow.containsKey(k));
     keyOfId.values().removeIf(k -> !lastPos.containsKey(k));
+    seenFresh.retainAll(lastPos.keySet());
     return out;
   }
 
