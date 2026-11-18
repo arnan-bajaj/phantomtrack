@@ -25,6 +25,8 @@ import phantom.sim.ui.SimWindow;
  *   ./gradlew run --args="--batch"                  every combination x seeds -> results/batch.csv
  *   ./gradlew run --args="--batch 180 10"           same, 180 s per run, 10 seeds
  *   ./gradlew run --args="--anonymous 180 5"        only the anonymous-tracking tables (s, seeds)
+ *   ./gradlew run --args="--batch-anon 180 5"       anonymous vs known-id tracking, partners on/off,
+ *                                                   open / choke / two lanes -> results/batch-anon.csv
  *   ./gradlew run --args="--tracker-sweep 180 5"    MultiTargetTracker settings compared (how its
  *                                                   defaults were chosen) + camera coverage
  * </pre>
@@ -40,6 +42,12 @@ public final class SimMain {
       double seconds = args.length > 1 ? Double.parseDouble(args[1]) : 180.0;
       int seeds = args.length > 2 ? Integer.parseInt(args[2]) : 3;
       BatchRunner.run(seconds, seeds, new File("results", "batch.csv"));
+      return;
+    }
+    if (args.length > 0 && args[0].equals("--batch-anon")) {
+      double seconds = args.length > 1 ? Double.parseDouble(args[1]) : 180.0;
+      int seeds = args.length > 2 ? Integer.parseInt(args[2]) : SEEDS;
+      BatchRunner.runAnonymous(seconds, seeds, new File("results", "batch-anon.csv"));
       return;
     }
     if (args.length > 0 && args[0].equals("--anonymous")) {

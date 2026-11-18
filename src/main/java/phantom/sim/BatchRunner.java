@@ -78,8 +78,46 @@ public final class BatchRunner {
           }
         }
       }
-      rows += writeAnonymousGrid(w, seconds, seeds, summary);
+      rows += writeAnonymousGrid(w, seconds, seeds, summary, List.of(SimMain.ANON_LAYOUTS),
+          List.of(SimSession.Tracking.values()), List.of(SimSession.Variant.values()), true,
+          SimMain.anonymousSetups());
     }
+    printSummary(rows, seconds, seeds, out, summary);
+  }
+
+  /**
+   * Only the anonymous-tracking grid, on every field layout (open, choke, two lanes), with our two
+   * alliance partners on the field and without them, for the two anonymous setups plus Line
+   * mirror + hold locked on #0:
+   * perfect tracking once, then known-id and anonymous tracking for each noisy camera and seed.
+   * This is the grid behind README "Which mode when" (contact sensing is always on).
+   */
+  public static void runAnonymous(double seconds, int seeds, File out) throws IOException {
+    File dir = out.getAbsoluteFile().getParentFile();
+    if (dir != null) {
+      dir.mkdirs();
+    }
+    Map<String, double[]> summary = new LinkedHashMap<>();
+    // The two anonymous setups, plus Line mirror + hold locked on #0 so man-to-man can be compared
+    // on the guarded opponent (README "Which mode when").
+    List<SimMain.Setup> setups = new ArrayList<>(SimMain.anonymousSetups());
+    setups.add(new SimMain.Setup("Line mirror + hold, locked #0", 3, true, true,
+        SimSession.Sensor.PERFECT, 1, SimMain.GUARDED_ID, true));
+    int rows;
+    try (PrintWriter w = new PrintWriter(out, StandardCharsets.UTF_8)) {
+      w.println(HEADER);
+      rows = 0;
+      for (boolean partners : new boolean[] {true, false}) {
+        rows += writeAnonymousGrid(w, seconds, seeds, summary, List.of(Scenarios.Layout.values()),
+            List.of(SimSession.Tracking.KNOWN_ID, SimSession.Tracking.ANONYMOUS),
+            List.of(SimSession.Variant.STANDARD), partners, setups);
+      }
+    }
+    printSummary(rows, seconds, seeds, out, summary);
+  }
+
+  private static void printSummary(
+      int rows, double seconds, int seeds, File out, Map<String, double[]> summary) {
     System.out.printf("Wrote %d runs (%.0f s each, %d seeds for noisy sensors) to %s%n%n",
         rows, seconds, seeds, out.getPath());
     System.out.printf("%-58s %10s %10s%n", "Opponents | Setup | Sensor", "Slowed", "Pins/run");
@@ -91,33 +129,35 @@ public final class BatchRunner {
 
   /** The anonymous-tracking grid, partners on. Returns the number of rows written. */
   private static int writeAnonymousGrid(PrintWriter w, double seconds, int seeds,
-      Map<String, double[]> summary) throws IOException {
+      Map<String, double[]> summary, List<Scenarios.Layout> layouts,
+      List<SimSession.Tracking> trackings, List<SimSession.Variant> variants, boolean partners,
+      List<SimMain.Setup> setups) throws IOException {
     int rows = 0;
     for (Scenarios.OpponentKind kind : Scenarios.OpponentKind.values()) {
-      for (Scenarios.Layout layout : SimMain.ANON_LAYOUTS) {
+      for (Scenarios.Layout layout : layouts) {
         SimMain.Setup none = new SimMain.Setup("No defense", -1, false, true).withLayout(layout)
-            .withTracking(SimSession.Tracking.KNOWN_ID, true, SimSession.Variant.STANDARD);
+            .withTracking(SimSession.Tracking.KNOWN_ID, partners, SimSession.Variant.STANDARD);
         SimSession base = SimMain.run(none, kind, seconds, null);
         double baseCycle = guardedCycle(base);
         int baseTotal = SimMain.totalCycles(base);
         w.println(row(kind, none, base, seconds, baseCycle, baseTotal));
         rows++;
-        for (SimMain.Setup setup : SimMain.anonymousSetups()) {
+        for (SimMain.Setup setup : setups) {
           for (SimSession.Sensor sensor : SimSession.Sensor.values()) {
-            for (SimSession.Tracking tracking : SimSession.Tracking.values()) {
-              for (SimSession.Variant variant : SimSession.Variant.values()) {
+            for (SimSession.Tracking tracking : trackings) {
+              for (SimSession.Variant variant : variants) {
                 if (!SimMain.anonymousRowExists(sensor, tracking, variant)) {
                   continue;
                 }
                 int n = sensor == SimSession.Sensor.PERFECT ? 1 : seeds;
                 for (long seed = 1; seed <= n; seed++) {
                   SimMain.Setup one = setup.withLayout(layout).withSensor(sensor, seed)
-                      .withTracking(tracking, true, variant);
+                      .withTracking(tracking, partners, variant);
                   SimSession s = SimMain.run(one, kind, seconds, null);
                   w.println(row(kind, one, s, seconds, baseCycle, baseTotal));
                   rows++;
                   String key = SimMain.kindLabel(kind) + " | " + layout.field().name()
-                      + " + partners | " + setup.label() + " | " + sensor.label() + " | "
+                      + (partners ? " + partners | " : " | ") + setup.label() + " | " + sensor.label() + " | "
                       + tracking.label() + (variant == SimSession.Variant.STANDARD ? ""
                           : " | " + variant.name().toLowerCase());
                   double[] acc = summary.computeIfAbsent(key, k -> new double[3]);

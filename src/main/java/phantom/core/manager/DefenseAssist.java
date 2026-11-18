@@ -50,6 +50,7 @@ public final class DefenseAssist {
 
   private RulesGuard guard; // null = disabled
   private ContactDetector.Config detectorConfig = ContactDetector.Config.placeholder();
+  private double pinSafetyMargin = RulesGuard.BASE_MARGIN;
   private boolean holdEnabled = false;
   private int modeIndex = 0;
   private int focusOpponentId = -1; // -1 = auto
@@ -252,7 +253,27 @@ public final class DefenseAssist {
   }
 
   private RulesGuard newGuard() {
-    return new RulesGuard(PinRules.placeholder(), field, 0.5, detectorConfig);
+    RulesGuard g = new RulesGuard(PinRules.placeholder(), field, pinSafetyMargin, detectorConfig);
+    g.setIdsAreStable(tracker.idsAreStable());
+    return g;
+  }
+
+  /**
+   * Tell the pin guard how fast this robot can back off: its speed cap (m/s) and acceleration
+   * limit (m/s^2). The guard then starts backing off {@link RulesGuard#safetyMarginFor} before the
+   * limit instead of the 0.5 s tuned for the simulator's 4.5 m/s, 6 m/s^2 robot. Resets the pin
+   * guard's timers, so set it before the match starts.
+   */
+  public void setDriveLimits(double maxSpeed, double maxAccel) {
+    this.pinSafetyMargin = RulesGuard.safetyMarginFor(PinRules.placeholder(), maxSpeed, maxAccel);
+    if (guard != null) {
+      guard = newGuard();
+    }
+  }
+
+  /** How long before the pin limit the guard starts backing off (s). */
+  public double pinSafetyMargin() {
+    return pinSafetyMargin;
   }
 
   public boolean rulesGuardEnabled() {

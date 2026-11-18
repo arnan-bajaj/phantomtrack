@@ -330,6 +330,12 @@ public final class MultiTargetTracker implements OpponentTracker {
     return new MultiTargetTracker(source, Config.defaults(measurementStd, colorErrorRate));
   }
 
+  /** Anonymous detections: a robot whose track is lost and not handed off comes back as a new id. */
+  @Override
+  public boolean idsAreStable() {
+    return false;
+  }
+
   @Override
   public List<TrackedRobot> getOpponents(double nowSec) {
     List<DetectionFrame> polled = source.poll(nowSec);

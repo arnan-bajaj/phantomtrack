@@ -33,7 +33,9 @@ import phantom.core.tracking.TrackedRobot;
  *                (opponent i is near and ahead: it can be the thing we are pushing on)
  *
  *   L_i       = bias + wVision * vision_i + (explains_i ? physical : 0)      per tracked opponent
- *   L_unknown = bias + (no opponent explains it ? physical : 0)
+ *   L_unknown = bias + max_j (wVision * vision_j) + (no identified opponent explains it ? physical : 0)
+ *               j over tracks WITHOUT a usable id (id < 0, or an id repeated in the same list);
+ *               max over nothing = 0, which is the case with a normal tracker
  *   L_blocked = bias + physical
  *   p_raw     = 1 / (1 + exp(-L))
  *
@@ -42,8 +44,15 @@ import phantom.core.tracking.TrackedRobot;
  * </pre>
  *
  * Outputs: probability = highest p; opponent = the one in contact with the highest p (UNKNOWN if
- * that is the unidentified one); direction = toward that opponent, or the push direction for
- * UNKNOWN.
+ * that is the unidentified one); direction = toward that opponent; for UNKNOWN toward the closest
+ * id-less track if one adds vision evidence, else the push direction.
+ *
+ * <p>Ids. Each hypothesis belongs to an id, so the ids must stay with their robots: a track that
+ * changes id starts a new hypothesis from p = 0, and its old one is dropped. RulesGuard therefore
+ * feeds this class episode keys ({@link EpisodeKeys}), not raw tracker ids. Tracks without a
+ * usable id never get a hypothesis of their own (they could not be told apart from loop to loop);
+ * their camera evidence goes to UNKNOWN, which is never confused with them because UNKNOWN is
+ * its own hypothesis, not an id in the list.
  *
  * <p>Deterministic: no clock reads (time is passed in), no randomness. It keeps state between
  * calls (smoothing, hysteresis, the fading deceleration cue), so use one instance per robot and
@@ -278,23 +287,38 @@ public final class ContactDetector {
 
     Map<Integer, Vec2> toward = new HashMap<>();
     Set<Integer> seen = new HashSet<>();
+    List<TrackedRobot> identified = new java.util.ArrayList<>();
     boolean explained = false;
+    double idlessVision = 0.0; // max over tracks without a usable id
+    Vec2 idlessDirection = Vec2.ZERO;
     for (TrackedRobot r : opponents) {
       Vec2 pos = r.positionAt(nowSec);
       Vec2 rel = pos.minus(self);
       double gap = rel.norm() - 2.0 * robotHalfSize;
+      if (r.id() < 0 || seen.contains(r.id())) {
+        double v = visionCue(gap);
+        if (v > idlessVision) {
+          idlessVision = v;
+          idlessDirection = rel.normalized();
+        }
+        continue;
+      }
       boolean explains = explains(telemetry, self, pos);
       explained |= explains;
       double logit = config.bias() + config.wVision() * visionCue(gap) + (explains ? physical : 0.0);
       step(byOpponent.computeIfAbsent(r.id(), k -> new Hypothesis()), sigmoid(logit), dt);
       toward.put(r.id(), rel.normalized());
       seen.add(r.id());
+      identified.add(r);
     }
     byOpponent.keySet().retainAll(seen); // a lost track cannot be confirmed: its contact ends
 
-    double unknownRaw = sigmoid(config.bias() + (explained ? 0.0 : physical));
+    double unknownRaw =
+        sigmoid(config.bias() + config.wVision() * idlessVision + (explained ? 0.0 : physical));
     step(unknown, unknownRaw, dt);
-    if (unknownRaw >= config.exitProbability() && !push.equals(Vec2.ZERO)) {
+    if (idlessVision > 0.0) {
+      unknownDirection = idlessDirection;
+    } else if (unknownRaw >= config.exitProbability() && !push.equals(Vec2.ZERO)) {
       unknownDirection = push;
     }
     step(blocked, sigmoid(config.bias() + physical), dt);
@@ -308,7 +332,7 @@ public final class ContactDetector {
     if (unknown.inContact) {
       contacts.add(UNKNOWN);
     }
-    for (TrackedRobot r : opponents) { // list order, so ties resolve the same way every run
+    for (TrackedRobot r : identified) { // list order, so ties resolve the same way every run
       Hypothesis h = byOpponent.get(r.id());
       probabilities.put(r.id(), h.p);
       best = Math.max(best, h.p);

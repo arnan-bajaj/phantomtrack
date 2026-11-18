@@ -114,6 +114,10 @@ public final class GhostSession {
             new DriverBlend(1.0, 0.0),
             new PerfectTracker(world),
             field);
+    // The pin guard's 0.5 s margin is for a 4.5 m/s, 6 m/s^2 robot. At the test caps a back-off
+    // takes longer, so the guard starts earlier (RulesGuard.safetyMarginFor: 1.17 s at 1 m/s and
+    // 2 m/s^2).
+    this.assist.setDriveLimits(cap, safety.accelLimit());
     this.pinWatch = new PinTimer(PinRules.placeholder(), field.robotHalfSize());
   }
 
