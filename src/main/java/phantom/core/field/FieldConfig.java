@@ -91,16 +91,55 @@ public record FieldConfig(
 
   /**
    * Nearest legal spot for a robot centered at p: inside the field walls and out of every
-   * obstacle. Obstacles push out along their shortest axis.
+   * obstacle. An obstacle pushes p out along the shortest of its four axis exits (left, right,
+   * down, up; ties in that order) that is inside the field walls:
+   *
+   * <pre>
+   *   exits: (min.x - r, p.y), (max.x + r, p.y), (p.x, min.y - r), (p.x, max.y + r)
+   *   keep those with r <= x <= length - r and r <= y <= width - r, take the nearest
+   * </pre>
+   *
+   * (An exit through a field wall would be clamped straight back into the obstacle when the
+   * obstacle touches that wall.) If no exit is on the field, it falls back to the plain shortest
+   * push, clamped to the walls.
    */
   public Vec2 clampInside(Vec2 p) {
     Vec2 q = clampToWalls(p);
     for (int pass = 0; pass < 2; pass++) { // twice, in case one push lands in a neighbor
       for (Obstacle o : obstacles) {
-        q = clampToWalls(o.pushOut(q, robotHalfSize));
+        if (o.blocks(q, robotHalfSize)) {
+          q = exitOnTheField(o, q);
+        }
       }
     }
     return q;
+  }
+
+  private Vec2 exitOnTheField(Obstacle o, Vec2 q) {
+    double r = robotHalfSize;
+    Vec2[] exits = {
+      new Vec2(o.min().x() - r, q.y()),
+      new Vec2(o.max().x() + r, q.y()),
+      new Vec2(q.x(), o.min().y() - r),
+      new Vec2(q.x(), o.max().y() + r)
+    };
+    Vec2 best = null;
+    double bestDistance = Double.POSITIVE_INFINITY;
+    for (Vec2 e : exits) {
+      double d = e.distanceTo(q);
+      if (insideWalls(e) && d < bestDistance) {
+        best = e;
+        bestDistance = d;
+      }
+    }
+    return best != null ? best : clampToWalls(o.pushOut(q, r));
+  }
+
+  private boolean insideWalls(Vec2 p) {
+    double m = robotHalfSize;
+    double eps = 1e-9;
+    return p.x() >= m - eps && p.x() <= length - m + eps && p.y() >= m - eps
+        && p.y() <= width - m + eps;
   }
 
   private Vec2 clampToWalls(Vec2 p) {
