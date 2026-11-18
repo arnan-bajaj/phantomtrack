@@ -96,7 +96,7 @@ sits at (0, 0), outside it, so the assist refuses to run until the pose is real.
 | Y | hold ground on/off |
 | Start | tell the pose estimator the robot is on the test start mark (trigger must be released) |
 | Back | **simulation only**: make the reported pose jump 0.75 m |
-| Rumble | touching a ghost for more than 1.5 s (the pin guard backs off at 2.5 s) |
+| Rumble | touching a ghost for more than 1.5 s (the pin guard backs off at about 1.83 s at the first-test caps) |
 
 ## Dashboard (SmartDashboard/PhantomTrack/Settings)
 
@@ -252,10 +252,15 @@ here as a pose jump and switches the assist off (that is intended).
 
 - Ghosts are only as good as the sim's bots (fixed routes, no game pieces). Use the results to
   check that the robot does what the sim does, not to measure defense.
-- The pin guard's 0.5 s margin is part of `phantom.core` and assumes full speed. At the
-  first-test caps (1.0 m/s, 2 m/s^2) backing off takes longer, and in the desktop sim the
-  any-touch contact timer reached 3.2–3.7 s. The referee count (contact while pressing) stayed 0.
-  A core change is proposed in the PR.
+- The pin guard's margin now comes from the caps (`GhostSession` calls
+  `DefenseAssist.setDriveLimits`; `RulesGuard.safetyMarginFor`): 1.17 s at the first-test caps
+  (1.0 m/s, 2 m/s^2), so it backs off at about 1.83 s of contact instead of 2.5 s. Against one
+  1 m/s Cycler the any-touch timer now peaks at 3.00 s (it was 3.82 s with the fixed 0.5 s), which
+  is no slack. With three ghosts it can still pass 3 s (wedged between robots). The referee
+  count (contact while pressing) stayed 0.
+- The pin guard gets drive telemetry from `PhantomTrack`: the command actually sent last loop
+  (after the caps and the geofence) and the measured velocity. Feeding it the assist's own wish
+  made every stop at the fence look like a stall against an unseen robot.
 - Pin back-offs can point into the geofence; the robot then waits at the fence line until the
   back-off times out (same open problem as back-offs into walls in the sim).
 - `getPoseTimestampSeconds()` defaults to "always fresh". Stale detection only works if the

@@ -36,17 +36,26 @@ code. Keep changes small, tested and explained.
 
 ## Roadmap status
 
-See README.md. Done: Phase 1 (sim), Phase 4 (four modes: Shadow, Interpose, Zone, Line mirror),
+See README.md. Done: Phase 1 (sim), Phase 4 (modes: Shadow, Interpose, Zone, Line mirror, Cut-off),
 Evader opponent and pushing-match contact model, hold ground + RulesGuard pin timer, Phase 2
-(simulated camera + Kalman filter, search behavior, stall detection). Key findings: holding ground
-is what slows opponents; a realistic camera halves the effect; the pin guard needs contact sensing
-beyond vision. Also done: TargetSelector (auto focus), `--batch` CSV export, human reaction delay
-for Evaders, walls/chokepoints/lanes with gate routing (Line mirror's lead holds with walls),
-IntentPredictor + Cut-off mode (best at chokepoints; prediction helps with a noisy camera). Open
-problem: with a realistic camera near walls, 1-5 pins per 3 min slip through; needs real contact
-sensing. Remaining roadmap
-items need the real robot (Phase 7: AprilTag pose + ghost opponents) or the 2027 game (FieldConfig,
-PinRules).
+(simulated camera + Kalman filter, search behavior), TargetSelector (auto focus), `--batch` CSV
+export, human reaction delay for Evaders, walls/chokepoints/lanes with gate routing,
+IntentPredictor + Cut-off mode. Nov 16 work, integrated: contact sensing (ContactDetector fuses
+drivetrain stall/current/deceleration with the camera; wall-aware EscapePlanner back-off),
+anonymous tracking (AnonymousSensor with partners, color errors, clutter, occlusion;
+MultiTargetTracker with re-acquisition), pin time keyed by contact episode (EpisodeKeys) so it
+survives track id changes, a pin-guard margin that grows with the robot's back-off time
+(`RulesGuard.safetyMarginFor`), and Phase 7 software (`robot/`: WPILib project, ghost opponents
+against the real pose, safety rules; it compiles phantom/core plus 8 AWT-free sim files listed in
+robot/shared-sources.txt, checked by RobotSharedSourcesTest).
+
+Key findings: Line mirror + hold is the safe default and holds up best with a real (anonymous)
+camera; Cut-off + hold is the specialist for dodgers at a gap; a realistic camera costs about half
+the effect and anonymity mostly costs man-to-man (driver re-points ~7.5/min). Open problems: pins
+are not zero (0.13-0.18 per 3 min with anonymous tracking + contact sensing, from camera error near
+contact); every contact threshold and camera number is a placeholder; with several robots around,
+the back-off can get wedged. Remaining items need the real robot (Phase 7 test session, contact
+calibration, camera measurements, Phase 8 vision) or the 2027 game (FieldConfig, PinRules).
 
 ## Workflow
 
