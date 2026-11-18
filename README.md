@@ -83,10 +83,14 @@ someone else will reach the goal at least 2 s sooner, for 0.5 s straight.
 `ContactDetector`, which fuses what the drivetrain feels (pushing but not moving, drive current,
 sudden deceleration) with camera proximity, so it also works on robots the camera does not see.
 Pin time belongs to a *contact episode*, not a track id, so it survives an anonymous tracker
-renaming the robot we are pushing (`EpisodeKeys`). At 2.5 s (0.5 s before the 3 s placeholder
-limit) it backs off left, right or straight back (`EscapePlanner`: never into a wall, never toward
-an opponent) until they are 1.83 m apart. A robot that backs off slower than the sim's starts
-earlier: `RulesGuard.safetyMarginFor` (1.17 s at the Phase 7 test caps of 1 m/s, 2 m/s²). Limits
+renaming the robot we are pushing (`EpisodeKeys`). It backs off `safetyMarginFor` before the 3 s
+placeholder limit, so that contact is over by 2.5 s even if the back-off has to slide a whole robot
+width out of a head-on push:
+`margin = 0.5 s slack + command latency + 20 ms loop + time to drive 0.95 m at min(speed cap, 3 m/s)
+and the acceleration limit` (1.09 s for the sim robot, so it backs off at 1.91 s; 1.82 s at the
+Phase 7 test caps of 1 m/s, 2 m/s² with an assumed 0.1 s latency, so it backs off at 1.18 s). It
+backs off left, right or straight back (`EscapePlanner`: never into a wall, never toward an
+opponent) until they are 1.83 m apart. Limits
 live in `PinRules` and must be updated from the 2027 manual. Every contact threshold is a
 placeholder: calibrate it on the robot first ([procedure](docs/findings/contact-sensing.md#calibration-procedure-for-the-real-robot)).
 
@@ -152,7 +156,12 @@ over NetworkTables, then vision. Nothing in `core/modes` or `core/control` chang
       pin-guard margin from the robot's back-off speed; `--batch-anon` grid
 - [x] Phase 7 software: `robot/` project, ghost opponents against the real pose, safety rules
       (deadman, override, speed/accel caps, geofence, pose faults), AdvantageScope layout
-- [ ] Phase 7 on the robot: wire the drivetrain adapter, run [docs/phase7-test-plan.md](docs/phase7-test-plan.md)
+- [x] Pin margin from back-off time + command latency (same rule in sim and robot), ghost-sim
+      study tool `PinMarginStudy`: see [docs/findings/robot-pin-margin.md](docs/findings/robot-pin-margin.md)
+- [ ] Redesign the back-off for several robots (don't slide into a second robot, don't retreat
+      along a pusher's path, know the geofence): 3 ghosts still reach up to 14 s of contact
+- [ ] Phase 7 on the robot: wire the drivetrain adapter, measure command latency, run
+      [docs/phase7-test-plan.md](docs/phase7-test-plan.md) with one ghost
 - [ ] Calibrate contact sensing on the robot (logs → replay through `ContactDetector`)
 - [ ] Measure the real camera pipeline (noise, latency, color errors, false positives) and replace
       the Realistic/Bad guesses; mask repeating false positives
@@ -172,33 +181,38 @@ Camera rows are 5 seeds, ± is the standard error over seeds. Raw data:
 
 | Situation | Perfect tracking | Realistic camera, anonymous tracking + contact sensing |
 | --- | --- | --- |
-| Open field, opponent pushes through | **Cut-off + hold** (+46%) | **Line mirror + hold** (+22% ± 1) ≈ Cut-off + hold (+18% ± 2) |
-| Open field, opponent dodges | **Line mirror + hold** (+40%) | **Line mirror + hold** (+15% ± 1) |
-| One chokepoint, pushes through | **Line mirror + hold** (+51%) | **Line mirror + hold** (+25% ± 2) ≈ Cut-off + hold (+20% ± 2) |
-| One chokepoint, dodges | **Line mirror + hold** (+43%) ≈ Cut-off + hold (+36%) | **Cut-off + hold** (+40% ± 3) |
-| Two lanes, pushes through | **Cut-off + hold** (+44%) ≈ Line mirror + hold (+37%) | **Line mirror + hold** (+31% ± 3); Cut-off + hold +28% ± 3 but 5 pins in 5 runs |
-| Two lanes, dodges | **Line mirror + hold** (+70%) | Line mirror + hold (+29% ± 3) ≈ Cut-off + hold (+27% ± 1) |
-| Slow the whole alliance | Line mirror + hold, auto = threat (+10–24%) | Line mirror + hold, auto = threat (+8–23%) |
+| Open field, opponent pushes through | **Cut-off + hold** (+36%) | **Line mirror + hold** (+22% ± 1); Cut-off + hold +13% ± 1 |
+| Open field, opponent dodges | **Line mirror + hold** (+35%) | **Line mirror + hold** (+14% ± 1) ≈ Cut-off + hold (+12% ± 1) |
+| One chokepoint, pushes through | **Line mirror + hold** (+27%) ≈ Cut-off + hold (+26%) | **Line mirror + hold** (+23% ± 1) ≈ Cut-off + hold (+20% ± 3) |
+| One chokepoint, dodges | **Line mirror + hold** (+42%) | Cut-off + hold (+28% ± 3) ≈ Line mirror + hold (+27% ± 3) |
+| Two lanes, pushes through | **Line mirror + hold** (+36%) ≈ Cut-off + hold (+34%) | **Line mirror + hold** (+28% ± 2); Cut-off + hold gridlocked in 2 of 5 runs |
+| Two lanes, dodges | **Line mirror + hold** (+45%) | **Line mirror + hold** (+27% ± 2) ≈ Cut-off + hold (+23% ± 2) |
+| Slow the whole alliance | Line mirror + hold, auto = threat (+10–24%) | Line mirror + hold, auto = threat (+7–20%) |
 
 "Locked" man-to-man with anonymous tracks needs the driver to point the assist at the robot again
-whenever its track is lost: the simulated driver does that 0.5 s after it notices, about 7.5 times
+whenever its track is lost: the simulated driver does that 0.5 s after it notices, about 7.4 times
 a minute (Realistic). Rows without alliance partners; partners are discussed below.
 
 - **Line mirror + hold is the safe default, more than ever.** With a real (anonymous) camera it is
-  best or tied in 5 of 6 situations. It only needs one coordinate and does not care which robot
-  is which.
-- **Cut-off + hold is the specialist for dodgers at a gap** (+40% vs +31%). In open field, its
-  perfect-tracking lead against bulldozers (+46%) does not survive a real camera (+18%).
+  best or tied in all 6 situations. It only needs one coordinate and does not care which robot is
+  which.
+- **Cut-off + hold no longer wins anywhere with a real camera** (it ties against dodgers at a gap).
+  Its perfect-tracking lead against bulldozers in open field (+36%) does not survive the camera
+  (+13%), and at two lanes it can gridlock.
 - **A real camera costs about half the effect.** Bad camera (one 70° camera, 35% dropped frames):
-  +4% to +21%, coverage of the opponents 17%. Camera coverage is the first thing to buy.
+  +5% to +14%, coverage of the opponents 18%. Camera coverage is the first thing to buy.
 - **Anonymity mostly costs man-to-man.** Same camera with ids handed over vs anonymous: Line
-  mirror + hold, auto = threat is within noise everywhere (e.g. choke Cyclers +13% vs +12%), but
-  Cut-off + hold locked on #0 drops (two lanes Cyclers +43% → +28%, choke Cyclers +26% → +20%).
+  mirror + hold, auto = threat moves by 0–3 points, but Cut-off + hold locked on #0 drops (choke
+  Evaders +44% → +28%, two lanes Evaders +35% → +23%, open Cyclers +21% → +13%).
 - **Pins are not zero.** Anonymous tracking + contact sensing, both cameras, Line mirror + hold
-  (auto) and Cut-off + hold, open/choke/two lanes, Cyclers and Evaders: **16 pins in 120 runs
-  without partners (0.13 per 180 s run), 22 in 120 with partners (0.18 per run)**. Perfect tracking:
-  0 (1 in a gridlocked partner run). **Calibrate contact sensing on the robot before using hold in a
-  match.**
+  (auto) and Cut-off + hold, open/choke/two lanes, Cyclers and Evaders: **11 pins in 120 runs
+  without partners (0.09 per 180 s run), 10 in 120 with partners (0.08 per run)**. Perfect
+  tracking: 0. **Calibrate contact sensing on the robot before using hold in a match.**
+- **The pin margin now depends on how fast the robot can back off** (Nov 17, see the next
+  section). It backs off at 1.91 s of contact instead of 2.5 s in the sim. That roughly halved the
+  pins above (from 16 and 22) and cost little with a camera (mean slowed of that grid −0.9 / −0.3
+  points without / with partners), but up to 24 points with perfect tracking (Line mirror + hold vs
+  Cyclers at the choke +51% → +27%).
 
 ### Pin guard with contact sensing
 
@@ -229,14 +243,20 @@ partners, 10 seeds × Realistic/Bad × open/choke/two lanes × Cyclers/Evaders �
   Anonymous camera, partners on, open + choke, both setups, both cameras, 15 seeds (240 runs):
   **55 pins keyed by id → 40 with episodes** (each half alone: 52 and 47), for 6% more back-offs.
   With stable ids (perfect, known-id camera) nothing changes.
-- **Robot speeds.** The 0.5 s margin was tuned for a 4.5 m/s, 6 m/s² robot. On the Phase 7 ghost
-  sim at the first-test caps (1 m/s, 2 m/s²) a back-off needs about 1.2 s to break contact, and the
-  guard's any-touch timer reached 3.82 s against one Cycler (Cut-off + hold, 300 s). The margin now
-  grows with the extra back-off time, `margin = 0.5 + max(0, T(v, a) − T(3, 6))` with `T` the time to
-  drive the 1 m back-off step: 1.17 s at 1 m/s and 2 m/s², still 0.5 s in the sim. Peak any-touch
-  time: **3.82 s → 3.00 s** (one Cycler), 2.16 s vs Line mirror + hold. That is no slack, the same
-  as the sim robot (2.82 s peak at 4.5 m/s). With three ghosts the timer still passes 3 s at every
-  speed (the robot gets wedged between robots); the referee count stayed 0 throughout.
+- **Robot speeds and command latency.** The guard backs off `safetyMarginFor` before the limit:
+  `margin = 0.5 s slack + latency + 20 ms loop + time to drive 0.95 m (one robot width + 0.05 m) at
+  min(cap, 3 m/s) and the acceleration limit`, the same rule in the sim and on the robot. Sim
+  robot: 1.09 s. Phase 7 first test (1 m/s, 2 m/s², assumed 0.1 s latency): 1.82 s. In the
+  Phase 7 ghost sim (`PinMarginStudy`, 48 setups × 300 s: 0.5 / 1 / 4.5 m/s, 0 / 100 ms extra
+  latency, 1 / 3 ghosts, Cyclers / Evaders, Line mirror / Cut-off + hold), episodes with more than
+  2.5 s of contact went **199 → 78**. With **one ghost** the peak is at most 2.5 s in 22 of 24 setups
+  (2.98 s Evader at 0.5 m/s; 2.56 s at 4.5 m/s with 100 ms). With **three ghosts it is not fixed**:
+  peaks of 2.9–14 s. Backing off earlier does not help there (0.9 s earlier: 78 → 97 episodes over
+  2.5 s). The back-off itself fails: it slides into a second ghost, then retreats straight
+  along the pusher's path, which follows at the same speed until the robot is held against the
+  geofence. The referee count stayed 0 in every setup. Write-up and the worst timeline:
+  [docs/findings/robot-pin-margin.md](docs/findings/robot-pin-margin.md). Redesigning the back-off
+  is the next step.
 
 ### Anonymous tracking
 
@@ -251,7 +271,7 @@ guesses until the real pipeline is measured).
   360° camera halves the re-points again.
 - **Partners are seldom taken for opponents** (a fresh track sits on a partner about 3% of the
   time), but they matter physically: we touch our own partners about 20 s per run at the choke, and
-  with partners on, Line mirror + hold (auto) vs Evaders at the choke drops from +23% to +4% ± 5.
+  with partners on, Line mirror + hold (auto) vs Evaders at the choke drops from +20% to −1% ± 2.
   In two lanes the partners jam the Cyclers' lanes on their own (no-defense cycle 12.9 s vs 7.4 s
   without partners), so "slowed" there is negative and not meaningful.
 - **Repeating false positives are the real danger** (experiment, off in the presets): with 3 fixed
@@ -271,13 +291,13 @@ reaches 3 s.
 
 | Setup | vs Cyclers (push through) | vs Evaders (dodge) | Pins (C / E) |
 | --- | --- | --- | --- |
-| Shadow | +5% | +20% | 0 / 0 |
-| **Shadow + hold** | **+19%** | **+31%** | **0 / 0** |
-| Interpose + hold | +0% | +7% | 0 / 0 |
-| Zone + hold | +4% | +1% | 0 / 0 |
-| Line mirror | +36% | +37% | 0 / 0 |
-| **Line mirror + hold** | **+33%** | **+40%** | **0 / 0** |
-| Cut-off + hold | +46% | +12% | 0 / 0 |
+| Shadow | +7% | +29% | 0 / 0 |
+| **Shadow + hold** | **+14%** | **+28%** | **0 / 0** |
+| Interpose + hold | +6% | +5% | 0 / 0 |
+| Zone + hold | +6% | +5% | 0 / 0 |
+| Line mirror | +27% | +29% | 0 / 0 |
+| **Line mirror + hold** | **+29%** | **+35%** | **0 / 0** |
+| Cut-off + hold | +36% | +12% | 0 / 0 |
 | Shadow + hold, no pin guard | +28% | jammed all match | 9 / 1 |
 | Line mirror + hold, no pin guard | +50% | +50% | 17 / 4 |
 
@@ -289,16 +309,16 @@ pipeline is measured.
 
 | Opponents | Setup | Perfect | Realistic | Bad |
 | --- | --- | --- | --- | --- |
-| Cyclers | Shadow + hold | +19% | +14% | +12% |
-| Cyclers | Line mirror + hold | +33% | +27% | +11% |
-| Evaders | Shadow + hold | +31% | +17% | +10% |
-| Evaders | Line mirror + hold | +40% | +18% | +11% |
+| Cyclers | Shadow + hold | +14% | +15% | +10% |
+| Cyclers | Line mirror + hold | +29% | +22% | +12% |
+| Evaders | Shadow + hold | +28% | +14% | +11% |
+| Evaders | Line mirror + hold | +35% | +17% | +11% |
 
-Pins with a camera: 0 to 0.2 per 180 s (contact sensing). Position estimate error: about 0.4 m
+Pins with a camera: 0 to 0.4 per 180 s (contact sensing). Position estimate error: about 0.4 m
 (Realistic), 0.9–1.1 m (Bad). Time each opponent is tracked: 50–72% (Realistic), 32–44% (Bad).
 
-- **Holding ground matters most for man-to-man** (Shadow +5% → +19% vs Cyclers). Line mirror
-  works with or without it (+36% / +33% vs Cyclers, +37% / +40% vs Evaders).
+- **Holding ground matters most for man-to-man** (Shadow +7% → +14% vs Cyclers). Line mirror
+  works with or without it (+27% / +29% vs Cyclers, +29% / +35% vs Evaders).
 - **Camera coverage matters more than camera accuracy.** Going from Realistic to Bad roughly
   doubles the error, but the bigger loss comes from seeing opponents less often.
 
@@ -306,16 +326,16 @@ Pins with a camera: 0 to 0.2 per 180 s (contact sensing). Position estimate erro
 
 | Setup | vs Cyclers | vs Evaders |
 | --- | --- | --- |
-| Shadow + hold, locked on one scorer | +4% | **+10%** |
-| Shadow + hold, auto = nearest | +4% | +7% |
+| Shadow + hold, locked on one scorer | +3% | **+8%** |
+| Shadow + hold, auto = nearest | +6% | +7% |
 | Shadow + hold, auto = threat | +6% | +7% |
-| Line mirror + hold, locked on one scorer | +6% | **+13%** |
-| Line mirror + hold, auto = nearest | **+10%** | +11% |
+| Line mirror + hold, locked on one scorer | +6% | +11% |
+| Line mirror + hold, auto = nearest | +9% | +10% |
 | Line mirror + hold, auto = threat | **+10%** | **+13%** |
 
 - **Positional defense (Line mirror): let it take whoever comes through** (auto = threat): never
   worse than locking, and much better vs Cyclers.
-- **Man-to-man (Shadow): no clear winner any more** (+4–6% vs Cyclers, locking is best vs
+- **Man-to-man (Shadow): no clear winner any more** (+3–6% vs Cyclers, locking is best vs
   Evaders). Totals move by about ±1 cycle (≈ ±1.5%) between runs, so treat small gaps as ties.
 - Oddity: plain Shadow does better with a noisy camera than with perfect tracking. Tracking lag
   makes it drift into the opponent's path, which accidentally acts like hold.
@@ -328,18 +348,18 @@ without a defender near it. Baselines get slower with walls (Evaders: 7.15 s ope
 
 | Opponents | Setup | Open | Choke | Two lanes |
 | --- | --- | --- | --- | --- |
-| Cyclers | Shadow + hold | +19% | +16% | +17% |
-| Cyclers | **Line mirror + hold** | +33% | **+51%** | +37% |
-| Cyclers | Interpose + hold | +0% | +6% | +36% |
-| Cyclers | Cut-off + hold | **+46%** | +31% | **+44%** |
-| Evaders | Shadow + hold | +31% | +23% | +34% |
-| Evaders | **Line mirror + hold** | **+40%** | **+43%** | **+70%** |
-| Evaders | Line mirror + hold, auto = threat | +17% | +24% | +35% |
-| Evaders | Cut-off + hold | +12% | +36% | +34% |
+| Cyclers | Shadow + hold | +14% | +15% | +12% |
+| Cyclers | **Line mirror + hold** | +29% | **+27%** | **+36%** |
+| Cyclers | Interpose + hold | +6% | +4% | +32% |
+| Cyclers | Cut-off + hold | **+36%** | +26% | +34% |
+| Evaders | Shadow + hold | +28% | +22% | +19% |
+| Evaders | **Line mirror + hold** | **+35%** | **+42%** | **+45%** |
+| Evaders | Line mirror + hold, auto = threat | +12% | +24% | +25% |
+| Evaders | Cut-off + hold | +12% | +32% | +36% |
 
 - **Line mirror stays at or near the top with walls.** Its line sits just behind the gaps, so it
-  covers every exit. Even with two lanes to choose from, Evaders can't get around it (+70%).
-- **Interpose finally works in two lanes** (+36% vs Cyclers), standing in the lane the opponent
+  covers every exit. Even with two lanes to choose from, Evaders can't get around it (+45%).
+- **Interpose finally works in two lanes** (+32% vs Cyclers), standing in the lane the opponent
   is committed to.
 - Pins with walls and perfect tracking: 0 (5 before contact sensing).
 

@@ -86,7 +86,7 @@ loop. Press Start before each check. Settings: defaults (cap 1.0, 1 Cycler, Open
 | 1.3 Override | Hold trigger; while wheels are moving, push the left stick a little. Release the stick. | `DRIVER_OVERRIDE` and wheels follow the stick; on release `ASSIST` returns. | Wheels ignore the stick. |
 | 1.4 Autonomous | DS Autonomous, enable, hold trigger 5 s. | Nothing moves; `Status` = `NOT_TELEOP`. | Any motion. |
 | 1.5 Mirror on red | DS station Red 1. Trigger released, Start. Then hold the trigger. | `RobotPose` = (6.54, 4.04, 0°), `BlueFrame/RobotPose` = (10.00, 4.04, 180°), ghost and fence drawn on the red half; the robot (in AdvantageScope) drives toward the target arrow just as on blue. Pressing Start or switching alliance shows `POSE_FAULT` until the trigger is released and pressed again (expected). | Robot drives away from the arrow, or blue-frame pose is not (10.00, 4.04, 180°). |
-| 1.6 Rumble | Back on blue. Line mirror, hold trigger, wait for the ghost to reach the robot. | Controller rumbles once `MaxPinSeconds` passes 1.5 s, `BACKING_OFF` by about 1.9 s (margin 1.17 s at 1 m/s, 2 m/s²), rumble stops after. | No rumble, or rumble that never stops. |
+| 1.6 Rumble | Back on blue. Line mirror, hold trigger, wait for the ghost to reach the robot. | `BACKING_OFF` by about 1.2 s of contact (margin 1.82 s at 1 m/s, 2 m/s², 0.1 s assumed latency); if contact outlasts the back-off the controller rumbles once `MaxPinSeconds` passes 1.5 s, and stops after. `MaxPinSeconds` never above 2.5 s. | No rumble, or rumble that never stops. |
 | 1.7 Loop time | During 1.2–1.6 | No repeated loop-overrun warnings in the DS console. | Repeated overruns: try 1 ghost; report. |
 
 ## Step 2: carpet, 0.5 m/s
@@ -102,7 +102,7 @@ Driver max speed stays 1.5 m/s (the driver is not capped; drive gently).
 | 2.4 Take over | While moving, push the stick. | Robot follows the stick at once. |
 | 2.5 Disable | While moving, safety officer presses Enter. | Robot stops. |
 | 2.6 Fence | Shadow (D-pad down), hold trigger while the ghost goes back to its pickup (the target leaves the area). | Robot parks on the inner tape, center no more than ~0.15 m past it, never moving toward the outer tape. |
-| 2.7 Contact | Line mirror, let the Cycler run into the robot. | Robot only gives way slowly (≤ 0.11 m/s at this cap) or slides along; rumble at 1.5 s; `BACKING_OFF` by about 1.9 s; `PinViolations` stays 0. |
+| 2.7 Contact | Line mirror, let the Cycler run into the robot. | Robot only gives way slowly (≤ 0.11 m/s at this cap) or slides along; `BACKING_OFF` by about 1.2 s; `MaxPinSeconds` never above 2.5 s; `PinViolations` stays 0. One ghost only (three ghosts can trap the back-off, see robot/README). |
 
 ## Step 3: carpet, 1.0 m/s
 

@@ -50,7 +50,7 @@ public final class DefenseAssist {
 
   private RulesGuard guard; // null = disabled
   private ContactDetector.Config detectorConfig = ContactDetector.Config.placeholder();
-  private double pinSafetyMargin = RulesGuard.BASE_MARGIN;
+  private double pinSafetyMargin;
   private boolean holdEnabled = false;
   private int modeIndex = 0;
   private int focusOpponentId = -1; // -1 = auto
@@ -76,6 +76,7 @@ public final class DefenseAssist {
     this.blend = blend;
     this.tracker = tracker;
     this.field = field;
+    this.pinSafetyMargin = RulesGuard.simMargin(PinRules.placeholder(), field.robotHalfSize());
     this.guard = newGuard();
   }
 
@@ -259,16 +260,23 @@ public final class DefenseAssist {
   }
 
   /**
-   * Tell the pin guard how fast this robot can back off: its speed cap (m/s) and acceleration
-   * limit (m/s^2). The guard then starts backing off {@link RulesGuard#safetyMarginFor} before the
-   * limit instead of the 0.5 s tuned for the simulator's 4.5 m/s, 6 m/s^2 robot. Resets the pin
-   * guard's timers, so set it before the match starts.
+   * Tell the pin guard how fast this robot can back off: its speed cap (m/s), acceleration limit
+   * (m/s^2) and command latency (s, beyond the 20 ms loop). The guard then starts backing off
+   * {@link RulesGuard#safetyMarginFor} before the limit. Without this call it uses the simulator
+   * robot's numbers ({@link RulesGuard#simMargin}). Resets the pin guard's timers, so set it before
+   * the match starts.
    */
-  public void setDriveLimits(double maxSpeed, double maxAccel) {
-    this.pinSafetyMargin = RulesGuard.safetyMarginFor(PinRules.placeholder(), maxSpeed, maxAccel);
+  public void setDriveLimits(double maxSpeed, double maxAccel, double latencySec) {
+    this.pinSafetyMargin = RulesGuard.safetyMarginFor(
+        PinRules.placeholder(), field.robotHalfSize(), maxSpeed, maxAccel, latencySec);
     if (guard != null) {
       guard = newGuard();
     }
+  }
+
+  /** Pin time the guard has counted in this opponent's open episode (s); 0 if disabled. */
+  public double pinSeconds(int opponentId) {
+    return guard == null ? 0.0 : guard.contactSeconds(opponentId);
   }
 
   /** How long before the pin limit the guard starts backing off (s). */

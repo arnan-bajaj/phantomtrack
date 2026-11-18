@@ -104,6 +104,11 @@ dependencies {
 test {
     useJUnitPlatform()
     systemProperty 'junit.jupiter.extensions.autodetection.enabled', 'true'
+    // PinMarginStudy only runs when asked:
+    //   ./gradlew test --tests '*PinMarginStudy*' -Dpt.study=true [-Dpt.studyOut=dir]
+    ['pt.study', 'pt.studyOut', 'pt.studySeconds'].each { k ->
+        if (System.getProperty(k) != null) { systemProperty k, System.getProperty(k) }
+    }
     testLogging {
         events 'passed', 'failed', 'skipped'
         exceptionFormat 'full'

@@ -96,7 +96,7 @@ sits at (0, 0), outside it, so the assist refuses to run until the pose is real.
 | Y | hold ground on/off |
 | Start | tell the pose estimator the robot is on the test start mark (trigger must be released) |
 | Back | **simulation only**: make the reported pose jump 0.75 m |
-| Rumble | touching a ghost for more than 1.5 s (the pin guard backs off at about 1.83 s at the first-test caps) |
+| Rumble | touching a ghost for more than 1.5 s (the pin guard has already started backing off at about 1.2 s at the first-test caps, so a rumble means contact is outlasting the back-off) |
 
 ## Dashboard (SmartDashboard/PhantomTrack/Settings)
 
@@ -252,12 +252,18 @@ here as a pose jump and switches the assist off (that is intended).
 
 - Ghosts are only as good as the sim's bots (fixed routes, no game pieces). Use the results to
   check that the robot does what the sim does, not to measure defense.
-- The pin guard's margin now comes from the caps (`GhostSession` calls
-  `DefenseAssist.setDriveLimits`; `RulesGuard.safetyMarginFor`): 1.17 s at the first-test caps
-  (1.0 m/s, 2 m/s^2), so it backs off at about 1.83 s of contact instead of 2.5 s. Against one
-  1 m/s Cycler the any-touch timer now peaks at 3.00 s (it was 3.82 s with the fixed 0.5 s), which
-  is no slack. With three ghosts it can still pass 3 s (wedged between robots). The referee
-  count (contact while pressing) stayed 0.
+- The pin guard's margin comes from the caps and the command latency (`GhostSession` calls
+  `DefenseAssist.setDriveLimits`; `RulesGuard.safetyMarginFor`): 0.5 s slack + latency + 20 ms
+  + time to slide one robot width (0.95 m). At the first-test caps (1.0 m/s, 2 m/s^2) with the
+  assumed `SafetyConfig.ASSUMED_COMMAND_LATENCY_SEC` = 0.1 s that is 1.82 s, so it backs off at
+  about 1.18 s of contact. **Measure the latency** (command step vs measured velocity in the log)
+  and update that constant.
+- **Use ONE ghost for contact tests.** In `PinMarginStudy` (run it with
+  `./gradlew test --tests '*PinMarginStudy*' -Dpt.study=true`), one ghost stays at or under 2.5 s
+  of contact in 22 of 24 setups, with and without 100 ms extra latency. With three ghosts the
+  back-off can slide into a second ghost and then be chased along the pusher's path to the
+  geofence, with up to 14 s of contact (the referee count stayed 0). See
+  `docs/findings/robot-pin-margin.md`.
 - The pin guard gets drive telemetry from `PhantomTrack`: the command actually sent last loop
   (after the caps and the geofence) and the measured velocity. Feeding it the assist's own wish
   made every stop at the fence look like a stall against an unseen robot.

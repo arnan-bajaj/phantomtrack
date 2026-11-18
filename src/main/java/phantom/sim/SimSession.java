@@ -17,6 +17,7 @@ import phantom.core.modes.LineMirrorMode;
 import phantom.core.modes.ShadowMode;
 import phantom.core.modes.ZoneMode;
 import phantom.core.geometry.Vec2;
+import phantom.core.control.RulesGuard;
 import phantom.core.rules.ContactDetector;
 import phantom.core.tracking.Hungarian;
 import phantom.core.tracking.KalmanOpponentTracker;
@@ -226,6 +227,9 @@ public final class SimSession {
     // The detector's vision ramp is a per-camera calibration: as wide as the tracking error.
     this.assist.setContactDetectorConfig(
         ContactDetector.Config.placeholder().withVisionError(sensor.trackingErrorM));
+    // Pin margin from our robot's own limits: the same rule as on the real robot.
+    this.assist.setDriveLimits(
+        world.self().maxSpeed(), world.self().maxAccel(), RulesGuard.SIM_LATENCY_SECONDS);
   }
 
   /** Camera + tracker for one session. */

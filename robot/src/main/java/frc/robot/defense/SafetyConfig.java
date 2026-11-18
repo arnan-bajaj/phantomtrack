@@ -46,6 +46,13 @@ public record SafetyConfig(
   /** Hard ceiling for the dashboard speed cap: a typical swerve's top speed (m/s). */
   public static final double MAX_SPEED_CAP = 4.5;
 
+  /**
+   * PLACEHOLDER. Time from a command leaving the assist to the wheels acting on it, beyond the
+   * 20 ms loop (s): CAN, motor-controller control loop, module steering. Used for the pin guard's
+   * margin. Measure it on the real drivetrain (command step vs measured velocity in the log).
+   */
+  public static final double ASSUMED_COMMAND_LATENCY_SEC = 0.1;
+
   /** Slowest useful cap (m/s); below this the robot barely overcomes carpet friction. */
   public static final double MIN_SPEED_CAP = 0.1;
 

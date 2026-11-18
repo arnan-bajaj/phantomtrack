@@ -297,6 +297,11 @@ public final class PhantomTrack {
   }
 
   /** Where the active mode wants us, even when the assist is not driving. */
+  /** The running ghost session, or null before the first usable pose (for tests and studies). */
+  GhostSession session() {
+    return session;
+  }
+
   public Optional<DefenseTarget> target() {
     return session == null ? Optional.empty() : session.assist().lastTarget();
   }
