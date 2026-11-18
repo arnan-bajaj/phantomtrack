@@ -1,7 +1,6 @@
 package phantom.core.control;
 
 import java.util.ArrayList;
-import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -57,18 +56,25 @@ import phantom.core.tracking.TrackedRobot;
  *
  *   BACK OFF from id when contactSeconds(id) >= limit - safetyMargin (safetyMargin from
  *   {@link #safetyMarginFor}: slack + latency + one loop + time to slide one robot width out at
- *   this robot's speed and acceleration), until a fresh estimate
- *   says gap >= resetSeparation (the episode itself stays open until the extra RESET_MARGIN, so
- *   touching again re-triggers at once), the episode ends, or MAX_BACKOFF_SECONDS pass. The direction comes from {@link EscapePlanner}: left, right or
- *   straight back, whichever does not hit a wall within D = BACKOFF_SPEED * LOOKAHEAD_SECONDS,
- *   never drives toward the opponent, leaves its path and has the most clearance. The direction
- *   is held (a straight line) for as long as it stays wall-free for D ahead of where we are now
- *   and still points away from every threat; when it does not, we pick again. If the drivetrain says we are blocked while backing off (after
- *   ESCAPE_GRACE_SECONDS to get moving), that option is ruled out for BLOCKED_SECONDS.
+ *   this robot's speed and acceleration), until a fresh estimate says gap >= resetSeparation
+ *   (the episode itself stays open until the extra RESET_MARGIN, so touching again re-triggers
+ *   at once), the episode ends, or MAX_BACKOFF_SECONDS pass.
  *
- *     p*   = p_self + STEP * d,   v_ff = BACKOFF_SPEED * d
- *     no direction is free:  p* = p_self, v_ff = 0   (stop pushing; standing still is not a pin)
- *     still none after WEDGED_SECONDS: slide D along {@link EscapePlanner#leastInto}
+ *   Which way: {@link EscapePlanner} with every robot we see, predicted over the look-ahead
+ *     D = max(v * LOOKAHEAD_SECONDS, 2 * robotHalfSize + CONTACT_TOLERANCE),
+ *     v = min(speed cap, BACKOFF_SPEED), acceleration from {@link #setDriveLimits}.
+ *   A robot counts as touching if the detector says so or its camera gap is <= TOUCH_GAP.
+ *     1. the best usable LEFT / RIGHT / BACK ({@link EscapePlanner#chooseExit}): no wall, no
+ *        push on anyone we touch, not along a pusher's path, not into another robot;
+ *     2. else the best usable extra direction (perpendiculars to each pusher's path, 16 compass);
+ *     3. else YIELD: p* = p_self, v_ff = 0 (zero push effort toward every robot; whoever pushes
+ *        moves us). If no exit appears for WEDGED_SECONDS, slide D along
+ *        {@link EscapePlanner#leastInto} over all of them (the shallowest angle past the threats).
+ *   The direction is held while it stays usable from where we are now (a slide: until it has
+ *   gone D or meets a wall). If the drivetrain says we are blocked while backing off (after
+ *   ESCAPE_GRACE_SECONDS), directions within 30 deg of it are ruled out for BLOCKED_SECONDS.
+ *
+ *     p* = p_self + STEP * d,   v_ff = BACKOFF_SPEED * d
  *
  *   LOOK. If the mode has no target (nobody to guard) and we touched something the camera
  *   does not see within LOOK_SECONDS, stand still and face it instead of driving on blind:
@@ -90,6 +96,17 @@ public final class RulesGuard {
 
   /** One control loop: a back-off decided now is first commanded on the next loop (s). */
   public static final double LOOP_SECONDS = 0.02;
+
+  /** Speed and acceleration of the simulated robot (m/s, m/s^2). */
+  public static final double SIM_SPEED = 4.5;
+
+  public static final double SIM_ACCEL = 6.0;
+
+  /**
+   * A robot at most this far (bumper gap, m) by the camera counts as touching for the back-off's
+   * crowd checks, as well as anything the contact detector says we touch.
+   */
+  public static final double TOUCH_GAP = 0.1;
 
   /** Command latency of the simulated robot (s): none beyond the loop. */
   public static final double SIM_LATENCY_SECONDS = 0.0;
@@ -160,11 +177,15 @@ public final class RulesGuard {
   private EscapePlanner.Option escapeOption = null;
   private Vec2 escapeDirection = Vec2.ZERO;
   private double escapeSince = Double.NaN;
-  private double wedgedSince = Double.NaN; // no free direction since then
-  private boolean sliding = false; // last-resort slide out past a threat
+  private boolean yielding = false; // no safe exit: not pushing on anyone
+  private double wedgedSince = Double.NaN; // no safe exit since then
+  private boolean sliding = false; // last-resort slide out past the threats
   private Vec2 slideStart = Vec2.ZERO;
-  private final Map<EscapePlanner.Option, Double> blockedUntil =
-      new EnumMap<>(EscapePlanner.Option.class);
+  private final List<Vec2> blockedDirections = new ArrayList<>();
+  private final List<Double> blockedUntil = new ArrayList<>();
+
+  // How this robot drives while backing off (setDriveLimits).
+  private EscapePlanner.Motion motion = new EscapePlanner.Motion(BACKOFF_SPEED, SIM_ACCEL);
 
   // For callers that pass velocities instead of telemetry.
   private Vec2 previousMeasured = Vec2.ZERO;
@@ -240,7 +261,35 @@ public final class RulesGuard {
 
   /** The margin for the simulator's robot (4.5 m/s, 6 m/s^2, no extra latency): 1.0867 s. */
   public static double simMargin(PinRules rules, double robotHalfSize) {
-    return safetyMarginFor(rules, robotHalfSize, 4.5, 6.0, SIM_LATENCY_SECONDS);
+    return safetyMarginFor(rules, robotHalfSize, SIM_SPEED, SIM_ACCEL, SIM_LATENCY_SECONDS);
+  }
+
+  /**
+   * How this robot drives while backing off: at v = min(maxSpeed, BACKOFF_SPEED) with
+   * acceleration maxAccel. Defaults to the sim robot (3 m/s, 6 m/s^2). Non-positive or NaN values
+   * are ignored.
+   */
+  public void setDriveLimits(double maxSpeed, double maxAccel) {
+    if (maxSpeed > 0.0 && maxAccel > 0.0) {
+      motion = new EscapePlanner.Motion(Math.min(maxSpeed, BACKOFF_SPEED), maxAccel);
+    }
+  }
+
+  /**
+   * Look-ahead distance of the back-off (m): LOOKAHEAD_SECONDS of travel at this robot's back-off
+   * speed, but never less than one robot width plus the contact tolerance (the slide out of a
+   * head-on push):
+   *
+   * <pre>
+   *   D = max(v * LOOKAHEAD_SECONDS, 2 * robotHalfSize + CONTACT_TOLERANCE)
+   * </pre>
+   *
+   * Sim robot: max(3 * 0.5, 0.95) = 1.5 m. Phase 7 first test (1 m/s): max(0.5, 0.95) = 0.95 m.
+   */
+  public double lookahead() {
+    return Math.max(
+        motion.speed() * LOOKAHEAD_SECONDS,
+        2.0 * field.robotHalfSize() + PinTimer.CONTACT_TOLERANCE);
   }
 
   /** Back off this long before the limit (s). */
@@ -342,8 +391,10 @@ public final class RulesGuard {
     }
     if (backoffStarts.isEmpty()) {
       escapeOption = null;
+      yielding = false;
       sliding = false;
       wedgedSince = Double.NaN;
+      blockedDirections.clear();
       blockedUntil.clear();
       if (target.isEmpty()) {
         Optional<Vec2> unseen = unseenContact(nowSec, selfPos, positions);
@@ -454,49 +505,66 @@ public final class RulesGuard {
         nearest = positions.containsKey(id) ? id : -1;
       }
     }
-    List<Vec2> others = new ArrayList<>();
+    // Every other robot we see: touching if the detector says so or the camera gap is tiny.
+    List<EscapePlanner.Robot> robots = new ArrayList<>();
     for (Map.Entry<Integer, Vec2> e : positions.entrySet()) {
       if (!backoffStarts.containsKey(e.getKey())) {
-        others.add(e.getValue());
+        boolean touching =
+            est.inContactWith(e.getKey()) || pinTimer.gap(selfPos, e.getValue()) <= TOUCH_GAP;
+        robots.add(new EscapePlanner.Robot(
+            e.getValue(), lastSeen.get(e.getKey()).velocity(), true, touching));
       }
     }
-    double distance = BACKOFF_SPEED * LOOKAHEAD_SECONDS;
+    double distance = lookahead();
 
     // Blocked while backing off: rule this direction out for a while.
     if (escapeOption != null
         && nowSec - escapeSince >= ESCAPE_GRACE_SECONDS
         && est.blocked()
         && est.pushDirection().dot(escapeDirection) >= 0.7) {
-      blockedUntil.put(escapeOption, nowSec + BLOCKED_SECONDS);
-      escapeOption = null;
-    }
-    Set<EscapePlanner.Option> blocked = new HashSet<>();
-    for (Map.Entry<EscapePlanner.Option, Double> e : blockedUntil.entrySet()) {
-      if (nowSec < e.getValue()) {
-        blocked.add(e.getKey());
-      }
-    }
-
-    // Keep the current direction only while it stays free of walls for the whole look-ahead;
-    // otherwise (or at the start) pick again from where we are now.
-    boolean slideDone = sliding && selfPos.distanceTo(slideStart) >= distance;
-    if (escapeOption != null
-        && (slideDone
-            || EscapePlanner.hitsWall(field, selfPos, escapeDirection, distance)
-            || (!sliding && EscapePlanner.drivesInto(selfPos, threats, escapeDirection)))) {
+      blockedDirections.add(escapeDirection);
+      blockedUntil.add(nowSec + BLOCKED_SECONDS);
       escapeOption = null;
       sliding = false;
     }
+    for (int i = blockedUntil.size() - 1; i >= 0; i--) {
+      if (nowSec >= blockedUntil.get(i)) {
+        blockedUntil.remove(i);
+        blockedDirections.remove(i);
+      }
+    }
+
+    // Keep the current direction while it is still a way out from where we are now (a slide:
+    // until it has gone D or meets a wall); otherwise, or at the start, pick again.
+    if (escapeOption != null && sliding) {
+      if (selfPos.distanceTo(slideStart) >= distance
+          || EscapePlanner.hitsWall(field, selfPos, escapeDirection, distance)) {
+        escapeOption = null;
+        sliding = false;
+      }
+    } else if (escapeOption != null
+        && !EscapePlanner.evaluate(field, selfPos, threats, robots, escapeDirection, distance, motion)
+            .usable()) {
+      escapeOption = null;
+    }
     if (escapeOption == null) {
-      List<EscapePlanner.Candidate> candidates =
-          EscapePlanner.candidates(field, selfPos, threats, distance, others);
-      Optional<EscapePlanner.Candidate> choice = EscapePlanner.choose(candidates, blocked);
+      sliding = false;
+      List<EscapePlanner.Candidate> classic =
+          EscapePlanner.candidates(field, selfPos, threats, robots, distance, motion);
+      List<EscapePlanner.Candidate> extra =
+          EscapePlanner.extraCandidates(field, selfPos, threats, robots, distance, motion);
+      Optional<EscapePlanner.Candidate> choice = EscapePlanner.chooseExit(classic, blockedDirections);
       if (choice.isEmpty()) {
+        choice = EscapePlanner.chooseExit(extra, blockedDirections);
+      }
+      if (choice.isEmpty()) { // no safe exit: yield, and slide out if that goes on too long
         if (Double.isNaN(wedgedSince)) {
           wedgedSince = nowSec;
         }
         if (nowSec - wedgedSince >= WEDGED_SECONDS) {
-          choice = EscapePlanner.leastInto(candidates, blocked);
+          List<EscapePlanner.Candidate> all = new ArrayList<>(classic);
+          all.addAll(extra);
+          choice = EscapePlanner.leastInto(all, Set.of());
           sliding = choice.isPresent();
           slideStart = selfPos;
         }
@@ -511,8 +579,11 @@ public final class RulesGuard {
 
     double heading = nearestPos.minus(selfPos).angle(); // keep facing them
     nearest = nearest == UNKNOWN ? UNKNOWN : keys.aliasOf(nearest); // back to a track id
-    if (escapeOption == null) {
-      return new DefenseTarget(selfPos, heading, Vec2.ZERO, nearest); // nowhere to go: stop pushing
+    yielding = escapeOption == null;
+    if (yielding) {
+      // No safe exit: YIELD. Stand where we are with no feedforward, so the command pushes on
+      // nobody (zero effort toward every robot); whoever pushes moves us.
+      return new DefenseTarget(selfPos, heading, Vec2.ZERO, nearest);
     }
     Vec2 retreat = field.clampInside(selfPos.plus(escapeDirection.times(STEP)));
     return new DefenseTarget(retreat, heading, escapeDirection.times(BACKOFF_SPEED), nearest);
@@ -599,6 +670,11 @@ public final class RulesGuard {
   /** True while backing off from something the camera has not identified. */
   public boolean blindBackingOff(double nowSec) {
     return backoffStarts.containsKey(UNKNOWN);
+  }
+
+  /** True while backing off with no safe exit: standing still, pushing on nobody. */
+  public boolean yielding() {
+    return backingOff() && yielding;
   }
 
   /** Which way the current back-off goes; empty if not backing off or standing still. */

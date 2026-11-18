@@ -104,15 +104,21 @@ dependencies {
 test {
     useJUnitPlatform()
     systemProperty 'junit.jupiter.extensions.autodetection.enabled', 'true'
-    // PinMarginStudy only runs when asked:
-    //   ./gradlew test --tests '*PinMarginStudy*' -Dpt.study=true [-Dpt.studyOut=dir]
-    ['pt.study', 'pt.studyOut', 'pt.studySeconds'].each { k ->
-        if (System.getProperty(k) != null) { systemProperty k, System.getProperty(k) }
-    }
     testLogging {
         events 'passed', 'failed', 'skipped'
         exceptionFormat 'full'
     }
+}
+
+// Ghost-sim pin study (not a unit test). Switches are program arguments, never -D properties
+// (Gradle's daemon keeps those between builds):
+//   ./gradlew pinMarginStudy --args="seconds=300 out=build/pin-margin-study only=3"
+tasks.register('pinMarginStudy', JavaExec) {
+    description = 'Contact time against ghosts (PinMarginStudy). Args: seconds= out= only='
+    group = 'verification'
+    classpath = sourceSets.test.runtimeClasspath
+    mainClass = 'frc.robot.defense.PinMarginStudy'
+    dependsOn testClasses
 }
 
 // Simulation configuration (e.g. environment variables).

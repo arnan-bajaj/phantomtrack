@@ -51,6 +51,8 @@ public final class DefenseAssist {
   private RulesGuard guard; // null = disabled
   private ContactDetector.Config detectorConfig = ContactDetector.Config.placeholder();
   private double pinSafetyMargin;
+  private double backoffSpeed = RulesGuard.SIM_SPEED;
+  private double backoffAccel = RulesGuard.SIM_ACCEL;
   private boolean holdEnabled = false;
   private int modeIndex = 0;
   private int focusOpponentId = -1; // -1 = auto
@@ -256,6 +258,7 @@ public final class DefenseAssist {
   private RulesGuard newGuard() {
     RulesGuard g = new RulesGuard(PinRules.placeholder(), field, pinSafetyMargin, detectorConfig);
     g.setIdsAreStable(tracker.idsAreStable());
+    g.setDriveLimits(backoffSpeed, backoffAccel);
     return g;
   }
 
@@ -269,9 +272,18 @@ public final class DefenseAssist {
   public void setDriveLimits(double maxSpeed, double maxAccel, double latencySec) {
     this.pinSafetyMargin = RulesGuard.safetyMarginFor(
         PinRules.placeholder(), field.robotHalfSize(), maxSpeed, maxAccel, latencySec);
+    if (maxSpeed > 0.0 && maxAccel > 0.0) {
+      this.backoffSpeed = maxSpeed;
+      this.backoffAccel = maxAccel;
+    }
     if (guard != null) {
       guard = newGuard();
     }
+  }
+
+  /** True if the pin guard is backing off with no safe exit (yielding) on the last update. */
+  public boolean guardYielding() {
+    return guard != null && guard.yielding();
   }
 
   /** Pin time the guard has counted in this opponent's open episode (s); 0 if disabled. */

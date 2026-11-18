@@ -18,7 +18,7 @@ ghosts (ghost top speed = our cap) × Line mirror + hold / Cut-off + hold, first
 0.75 m fence margin). 48 runs.
 
 ```bash
-cd robot && ./gradlew test --tests '*PinMarginStudy*' -Dpt.study=true -Dpt.studyOut=build/study
+cd robot && ./gradlew pinMarginStudy --args="out=build/study"   # program arguments since Nov 17
 ```
 
 "Contact time" is GhostSession's any-touch timer: per ghost, time with a bumper gap of at most
@@ -186,6 +186,7 @@ The sim robot now backs off at 1.91 s of contact instead of 2.5 s.
 
 ## Next
 
-Redesign the back-off for crowds: treat other robots as obstacles, don't retreat along a
+Done in [backoff-redesign.md](backoff-redesign.md) (one ghost fixed, three not). Original note:
+redesign the back-off for crowds: treat other robots as obstacles, don't retreat along a
 pusher's path, know the geofence on the robot. Re-run `PinMarginStudy` (target: 3 ghosts at or
 under 2.5 s) plus `--headless` and `--batch-anon` after it.

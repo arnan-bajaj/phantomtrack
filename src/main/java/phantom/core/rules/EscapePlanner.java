@@ -34,7 +34,9 @@ import phantom.core.geometry.Vec2;
  *     intoThreat = minAway < 0                                       (drives toward one)
  *
  *   choose: never a direction that hitsWall or intoThreat (or that the caller found blocked);
- *           then prefer leavesPath; then the largest min(clearance, CLEARANCE_CAP);
+ *           then prefer leavesPath; then the largest min(endGap, CLEARANCE_CAP) (see Crowds;
+ *           with no other robots it only depends on the threats); then the largest
+ *           min(clearance, CLEARANCE_CAP);
  *           then (threat not tracked) BACK; then the end point nearer the defended goal, so we
  *           stay goal-side; then the larger sideways distance from the opponent's path;
  *           then LEFT, RIGHT, BACK.
@@ -45,6 +47,36 @@ import phantom.core.geometry.Vec2;
  *
  * With several threats at once, BACK = unit(sum of away_i) and a = BACK (if the sum cancels,
  * a = away from the nearest threat and there is no BACK).
+ *
+ * <p><b>Crowds</b> ({@link #candidates(FieldConfig, Vec2, List, List, double, Motion)}): every
+ * other robot counts too, where it will be over the look-ahead, not only where it is now.
+ *
+ * <pre>
+ *   robots r: every tracked robot plus the threats; "touching" = in contact with us now
+ *   our drive along d:  s_k = k D / SAMPLES,   p_k = p_self + s_k d,
+ *                       t_k = time to drive s_k from rest at speed v, acceleration a
+ *                             ({@link #driveSeconds})
+ *   robot r:            u_r = a_r * max(|v_r|, v)   touching and tracked (a pusher keeps coming
+ *                                                   along its path a_r, at least as fast as we go)
+ *                           = v_r                   tracked, not touching (constant velocity)
+ *                           = 0                     not tracked (only a guess where it is)
+ *                       q_k = p_r + t_k u_r
+ *   gap_k(r) = |p_k - q_k| - 2 * halfSize
+ *
+ *   intoRobot  = d . unit(p_r - p_self) > 0 for some touching r          (we would push on it)
+ *   alongPath  = d . a_r > ALONG_PATH_COS (cos 45 deg) for some touching tracked r
+ *                (retreating along a pusher's path: it follows at the same speed, contact goes on)
+ *   meetsRobot = gap_k(r) <= CONTACT_TOLERANCE for some k and some r not touching now
+ *   endGap     = min over r of gap_SAMPLES(r)                   (how far from everyone we end up)
+ *
+ *   usable = not hitsWall, intoThreat, intoRobot, alongPath or meetsRobot
+ *   chooseExit: only usable candidates not within 30 deg of a blocked direction, ranked
+ *           like {@link #choose}.
+ * </pre>
+ *
+ * The caller tries LEFT / RIGHT / BACK first, then the {@link #extraDirections} (both
+ * perpendiculars to each touching robot's path and 16 compass directions). If none is usable
+ * there is no safe exit and the caller yields: it stops pushing on everyone instead of fleeing.
  */
 public final class EscapePlanner {
   private EscapePlanner() {}
@@ -58,11 +90,39 @@ public final class EscapePlanner {
   /** Opponent speed below which its travel direction is not trusted (m/s). */
   public static final double MOVING_SPEED = 0.3;
 
-  /** The three ways out. */
+  /** A direction counts as "along a pusher's path" above this d . a (cos 45 deg). */
+  public static final double ALONG_PATH_COS = Math.sqrt(0.5);
+
+  /** Number of compass directions tried when LEFT, RIGHT and BACK all fail. */
+  public static final int COMPASS = 16;
+
+  /** The three ways out, and OTHER for the extra directions. */
   public enum Option {
     LEFT,
     RIGHT,
-    BACK
+    BACK,
+    OTHER
+  }
+
+  /**
+   * Any robot near us, for the crowd checks.
+   *
+   * @param position where it is (m)
+   * @param velocity its velocity (m/s); ZERO if unknown
+   * @param tracked true if the camera sees it now
+   * @param touching true if it is in contact with us now
+   */
+  public record Robot(Vec2 position, Vec2 velocity, boolean tracked, boolean touching) {}
+
+  /**
+   * How we drive while backing off.
+   *
+   * @param speed back-off speed (m/s)
+   * @param accel acceleration (m/s^2); +infinity = reaches the speed at once
+   */
+  public record Motion(double speed, double accel) {
+    /** The planner's old assumption: 3 m/s at once. */
+    public static final Motion INSTANT = new Motion(3.0, Double.POSITIVE_INFINITY);
   }
 
   /**
@@ -88,6 +148,11 @@ public final class EscapePlanner {
    * @param intoThreat true if this direction drives toward a threat (d . away < 0)
    * @param goalDistance distance from the end point to the defended goal (m)
    * @param minAway smallest d . unit(p_self - p_threat) over the threats (-1 .. 1)
+   * @param intoRobot true if this direction pushes on a robot we are touching
+   * @param alongPath true if this direction retreats along a touching robot's path
+   * @param meetsRobot true if we would run into a robot we are not touching now
+   * @param endGap smallest predicted bumper gap to any robot at the end of the look-ahead (m);
+   *     +infinity if there are no robots
    */
   public record Candidate(
       Option option,
@@ -99,7 +164,17 @@ public final class EscapePlanner {
       boolean blind,
       boolean intoThreat,
       double goalDistance,
-      double minAway) {}
+      double minAway,
+      boolean intoRobot,
+      boolean alongPath,
+      boolean meetsRobot,
+      double endGap) {
+
+    /** True if this is a way out: no wall, no pushing on anyone, no running into anyone. */
+    public boolean usable() {
+      return !hitsWall && !intoThreat && !intoRobot && !alongPath && !meetsRobot;
+    }
+  }
 
   /** True if driving along dir moves toward any threat: d . unit(p_self - p_threat) < 0. */
   public static boolean drivesInto(Vec2 self, List<Threat> threats, Vec2 dir) {
@@ -185,6 +260,60 @@ public final class EscapePlanner {
     return away(self, threat.position());
   }
 
+  /**
+   * Time to drive s meters from rest at up to {@code speed}, accelerating at {@code accel}:
+   *
+   * <pre>
+   *   d_acc = v^2 / (2 a)
+   *   T     = sqrt(2 s / a)               if s <= d_acc
+   *         = v / a + (s - d_acc) / v     otherwise        (a = +infinity: T = s / v)
+   * </pre>
+   */
+  public static double driveSeconds(double s, double speed, double accel) {
+    if (s <= 0.0) {
+      return 0.0;
+    }
+    if (accel == Double.POSITIVE_INFINITY) {
+      return s / speed;
+    }
+    double dAcc = speed * speed / (2.0 * accel);
+    return s <= dAcc ? Math.sqrt(2.0 * s / accel) : speed / accel + (s - dAcc) / speed;
+  }
+
+  /** Where robot r is predicted to be t seconds from now (see the class comment). */
+  public static Vec2 predict(Vec2 self, Robot r, double t, double ourSpeed) {
+    if (!r.tracked()) {
+      return r.position();
+    }
+    Vec2 u;
+    if (r.touching()) {
+      Vec2 a = pathDirection(self, new Threat(r.position(), r.velocity(), true));
+      u = a.times(Math.max(r.velocity().norm(), ourSpeed));
+    } else {
+      u = r.velocity();
+    }
+    return r.position().plus(u.times(t));
+  }
+
+  /**
+   * The 16 compass directions (0, 22.5, ... deg) and both perpendiculars to the path of each
+   * touching robot, all as Option.OTHER. Tried when LEFT, RIGHT and BACK all fail.
+   */
+  public static List<Vec2> extraDirections(Vec2 self, List<Robot> robots) {
+    List<Vec2> out = new ArrayList<>();
+    for (Robot r : robots) {
+      if (r.touching() && r.tracked()) {
+        Vec2 a = pathDirection(self, new Threat(r.position(), r.velocity(), true));
+        out.add(new Vec2(-a.y(), a.x()));
+        out.add(new Vec2(a.y(), -a.x()));
+      }
+    }
+    for (int i = 0; i < COMPASS; i++) {
+      out.add(Vec2.polar(1.0, 2.0 * Math.PI * i / COMPASS));
+    }
+    return out;
+  }
+
   private static Vec2 away(Vec2 self, Vec2 threat) {
     Vec2 away = self.minus(threat).normalized();
     return away.equals(Vec2.ZERO) ? new Vec2(1.0, 0.0) : away;
@@ -199,6 +328,26 @@ public final class EscapePlanner {
    */
   public static List<Candidate> candidates(
       FieldConfig field, Vec2 self, List<Threat> threats, double distance, List<Vec2> otherRobots) {
+    List<Robot> robots = new ArrayList<>();
+    for (Vec2 p : otherRobots) {
+      robots.add(new Robot(p, Vec2.ZERO, true, false));
+    }
+    return candidates(field, self, threats, robots, distance, Motion.INSTANT);
+  }
+
+  /**
+   * Evaluates LEFT, RIGHT and BACK with the crowd checks (see the class comment).
+   *
+   * @param robots every other robot we know of (not the threats)
+   * @param motion how we drive while backing off
+   */
+  public static List<Candidate> candidates(
+      FieldConfig field,
+      Vec2 self,
+      List<Threat> threats,
+      List<Robot> robots,
+      double distance,
+      Motion motion) {
     if (threats.isEmpty()) {
       throw new IllegalArgumentException("need at least one threat");
     }
@@ -219,14 +368,64 @@ public final class EscapePlanner {
     }
     Vec2 left = new Vec2(-axis.y(), axis.x());
 
+    List<Robot> all = withThreats(threats, robots);
     List<Candidate> out = new ArrayList<>();
-    out.add(evaluate(field, self, threats, nearest, Option.LEFT, left, distance, otherRobots));
-    out.add(
-        evaluate(field, self, threats, nearest, Option.RIGHT, left.times(-1.0), distance, otherRobots));
+    out.add(evaluate(field, self, threats, nearest, Option.LEFT, left, distance, all, motion));
+    out.add(evaluate(
+        field, self, threats, nearest, Option.RIGHT, left.times(-1.0), distance, all, motion));
     if (!back.equals(Vec2.ZERO)) {
-      out.add(evaluate(field, self, threats, nearest, Option.BACK, back, distance, otherRobots));
+      out.add(evaluate(field, self, threats, nearest, Option.BACK, back, distance, all, motion));
     }
     return out;
+  }
+
+  /** The {@link #extraDirections}, evaluated like {@link #candidates} (all Option.OTHER). */
+  public static List<Candidate> extraCandidates(
+      FieldConfig field,
+      Vec2 self,
+      List<Threat> threats,
+      List<Robot> robots,
+      double distance,
+      Motion motion) {
+    Threat nearest = nearest(self, threats);
+    List<Robot> all = withThreats(threats, robots);
+    List<Candidate> out = new ArrayList<>();
+    for (Vec2 d : extraDirections(self, all)) {
+      out.add(evaluate(field, self, threats, nearest, Option.OTHER, d, distance, all, motion));
+    }
+    return out;
+  }
+
+  /** One direction, evaluated like {@link #candidates} (Option.OTHER). */
+  public static Candidate evaluate(
+      FieldConfig field,
+      Vec2 self,
+      List<Threat> threats,
+      List<Robot> robots,
+      Vec2 dir,
+      double distance,
+      Motion motion) {
+    return evaluate(field, self, threats, nearest(self, threats), Option.OTHER, dir, distance,
+        withThreats(threats, robots), motion);
+  }
+
+  private static Threat nearest(Vec2 self, List<Threat> threats) {
+    Threat nearest = threats.get(0);
+    for (Threat t : threats) {
+      if (t.position().distanceTo(self) < nearest.position().distanceTo(self)) {
+        nearest = t;
+      }
+    }
+    return nearest;
+  }
+
+  /** The threats are touching robots too. */
+  private static List<Robot> withThreats(List<Threat> threats, List<Robot> robots) {
+    List<Robot> all = new ArrayList<>(robots);
+    for (Threat t : threats) {
+      all.add(new Robot(t.position(), t.velocity(), t.tracked(), true));
+    }
+    return all;
   }
 
   private static Candidate evaluate(
@@ -237,7 +436,8 @@ public final class EscapePlanner {
       Option option,
       Vec2 dir,
       double distance,
-      List<Vec2> otherRobots) {
+      List<Robot> robots,
+      Motion motion) {
     Vec2 end = self.plus(dir.times(distance));
     boolean leaves = true;
     for (Threat t : threats) {
@@ -249,17 +449,59 @@ public final class EscapePlanner {
     for (Threat t : threats) {
       blind |= !t.tracked();
     }
+
+    // Static clearance (walls, obstacles; other robots where they are now).
+    List<Vec2> others = new ArrayList<>();
+    for (Robot r : robots) {
+      if (!r.touching()) {
+        others.add(r.position());
+      }
+    }
+    double clearance = pathClearance(field, self, dir, distance, others);
+    boolean wall = hitsWall(field, self, dir, distance);
+
+    // Robots: pushing on them, retreating along their path, running into them (see class comment).
+    boolean intoRobot = false;
+    boolean alongPath = false;
+    boolean meets = false;
+    double endGap = Double.POSITIVE_INFINITY;
+    double v = motion.speed();
+    double reach = 2.0 * field.robotHalfSize();
+    for (Robot r : robots) {
+      if (r.touching()) {
+        intoRobot |= dir.dot(r.position().minus(self).normalized()) > 1e-9;
+        if (r.tracked()) {
+          Vec2 a = pathDirection(self, new Threat(r.position(), r.velocity(), true));
+          alongPath |= dir.dot(a) > ALONG_PATH_COS + 1e-12;
+        }
+      }
+      for (int k = 0; k <= SAMPLES; k++) {
+        double s = distance * k / SAMPLES;
+        double t = driveSeconds(s, v, motion.accel());
+        double gap = self.plus(dir.times(s)).distanceTo(predict(self, r, t, v)) - reach;
+        if (!r.touching() && gap <= PinTimer.CONTACT_TOLERANCE) {
+          meets = true;
+        }
+        if (k == SAMPLES) {
+          endGap = Math.min(endGap, gap);
+        }
+      }
+    }
     return new Candidate(
         option,
         dir,
-        hitsWall(field, self, dir, distance),
-        pathClearance(field, self, dir, distance, otherRobots),
+        wall,
+        clearance,
         leaves,
         lateral,
         blind,
         drivesInto(self, threats, dir),
         end.distanceTo(field.defendedGoal()),
-        minAway(self, threats, dir));
+        minAway(self, threats, dir),
+        intoRobot,
+        alongPath,
+        meets,
+        endGap);
   }
 
   /**
@@ -281,9 +523,42 @@ public final class EscapePlanner {
     return Optional.ofNullable(best);
   }
 
+  /**
+   * The best {@link Candidate#usable} candidate whose direction is not within 30 deg of a
+   * {@code blocked} direction (d . b > cos 30 deg); empty if there is none (then the caller
+   * yields). Order of preference is in the class comment.
+   */
+  public static Optional<Candidate> chooseExit(List<Candidate> candidates, List<Vec2> blocked) {
+    Candidate best = null;
+    for (Candidate c : candidates) {
+      if (!c.usable() || isBlocked(c.direction(), blocked)) {
+        continue;
+      }
+      if (best == null || better(c, best)) {
+        best = c;
+      }
+    }
+    return Optional.ofNullable(best);
+  }
+
+  /** True if d is within 30 deg of one of the blocked directions. */
+  public static boolean isBlocked(Vec2 d, List<Vec2> blocked) {
+    for (Vec2 b : blocked) {
+      if (d.dot(b) > Math.sqrt(0.75)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private static boolean better(Candidate c, Candidate best) {
     if (c.leavesPath() != best.leavesPath()) {
       return c.leavesPath();
+    }
+    double cg = Math.min(c.endGap(), CLEARANCE_CAP);
+    double bg = Math.min(best.endGap(), CLEARANCE_CAP);
+    if (Math.abs(cg - bg) > 1e-9) {
+      return cg > bg;
     }
     double cc = Math.min(c.clearance(), CLEARANCE_CAP);
     double bc = Math.min(best.clearance(), CLEARANCE_CAP);
