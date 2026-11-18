@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import phantom.core.control.ChassisCommand;
 import phantom.core.geometry.Angles;
 import phantom.core.geometry.Pose;
@@ -22,10 +23,18 @@ import phantom.sim.Scenarios;
  * properties: Gradle's daemon keeps those between builds).
  *
  * <pre>
- *   ./gradlew pinMarginStudy --args="[seconds=300] [out=build/pin-margin-study] [only=text]"
+ *   ./gradlew pinMarginStudy --args="[seconds=300] [out=build/pin-margin-study] [only=text]
+ *                                    [ghosts=1|3] [seed=0]"
  * </pre>
  *
- * {@code only} keeps the setups whose label contains that text (e.g. {@code only="3 CO"}).
+ * {@code only} keeps the setups whose label contains that text (e.g. {@code only="3 CO"});
+ * {@code ghosts} keeps the setups with that many ghosts.
+ *
+ * <p>{@code seed}: 0 (default) is the fixed start used so far (our robot at (10, 4.035), engaged
+ * after 0.8 s). Any other seed draws, from {@code new Random(seed)}, a start offset dx, dy uniform
+ * in [-0.5, 0.5) m and an extra 0 to 3 s (0 to 149 loops) before the assist engages, while the
+ * ghosts already cycle; that wait comes out of the measured {@code seconds}. Everything else is deterministic, so seeds give the spread a behavior
+ * change has to beat.
  *
  * <p>Grid: speed cap 0.5 / 1.0 m/s (2 m/s^2) and 4.5 m/s (6 m/s^2, the sim robot) x command
  * latency 0 / 100 ms x Cyclers / Evaders x 1 / 3 ghosts (ghost top speed = our cap) x Line mirror
@@ -83,7 +92,7 @@ public final class PinMarginStudy {
   record Result(Config config, double peak, double refPeak, double maxAfterTrigger, int over25,
       int over30, int late, int chased, int intoOther, int recontact, int other, int backoffs,
       int refPins, int cycles, int minGhostCycles, double contactSeconds, List<String> worstTimeline,
-      double worstPeak, Breakdown breakdown) {}
+      double worstPeak, Breakdown breakdown, int holdSwitches) {}
 
   /**
    * Where the contact time of the episodes over 2.5 s came from (s), summed over them.
@@ -134,11 +143,24 @@ public final class PinMarginStudy {
   }
 
   static Result run(Config c, double seconds, boolean keepTimeline) {
+    return run(c, seconds, keepTimeline, 0L);
+  }
+
+  static Result run(Config c, double seconds, boolean keepTimeline, long seed) {
     PhantomTrack pt = new PhantomTrack(safety(c), new GhostSettings(Scenarios.Layout.OPEN, c.kind(),
         c.count(), c.cap()));
-    Pose pose = new Pose(10.0, 4.035, Math.PI);
+    double dx = 0.0;
+    double dy = 0.0;
+    int settleLoops = 40;
+    if (seed != 0L) {
+      Random rng = new Random(seed);
+      dx = rng.nextDouble() - 0.5;
+      dy = rng.nextDouble() - 0.5;
+      settleLoops += rng.nextInt(150);
+    }
+    Pose pose = new Pose(10.0 + dx, 4.035 + dy, Math.PI);
     int k = 0;
-    for (int i = 0; i < 40; i++, k++) {
+    for (int i = 0; i < settleLoops; i++, k++) {
       pt.update(new PhantomTrack.Input(DT * k, RobotMode.TELEOP, pose, Vec2.ZERO, DT * k,
           ChassisCommand.STOP, 0.0, 0.0));
     }
@@ -164,7 +186,9 @@ public final class PinMarginStudy {
     double peak = 0.0;
     double refPeak = 0.0;
     double contact = 0.0;
-    int steps = (int) Math.round(seconds / DT);
+    // The extra wait comes out of the measured run, so the ghosts always run 45 + seconds / DT
+    // loops in total, like the parked baseline (whose cycles are counted over the same time).
+    int steps = (int) Math.round(seconds / DT) - (settleLoops - 40);
     for (int i = 0; i < steps; i++, k++) {
       ChassisCommand out = pt.update(new PhantomTrack.Input(DT * k, RobotMode.TELEOP, pose, v,
           DT * k, ChassisCommand.STOP, 0.0, 1.0));
@@ -310,7 +334,8 @@ public final class PinMarginStudy {
     }
     return new Result(c, peak, refPeak, maxAfterTrigger, over25, over30, late, chased, intoOther,
         recontact, other, pt.session().assist().backoffsTriggered(), pt.pinViolations(), cycles,
-        minGhost, contact, worst, worstPeak, breakdown);
+        minGhost, contact, worst, worstPeak, breakdown,
+        pt.session().assist().holdSwitches());
   }
 
   static boolean gridlocked(Result r, double seconds) {
@@ -343,39 +368,46 @@ public final class PinMarginStudy {
     double seconds = 300.0;
     Path dir = Path.of("build/pin-margin-study");
     String only = "";
+    int ghosts = 0;
+    long seed = 0L;
     for (String a : args) {
       if (a.startsWith("seconds=")) {
         seconds = Double.parseDouble(a.substring(8));
       } else if (a.startsWith("out=")) {
         dir = Path.of(a.substring(4));
+      } else if (a.startsWith("ghosts=")) {
+        ghosts = Integer.parseInt(a.substring(7));
+      } else if (a.startsWith("seed=")) {
+        seed = Long.parseLong(a.substring(5));
       } else if (a.startsWith("only=")) {
         only = a.substring(5).replace('_', ' '); // "_" stands for a space
       } else {
         throw new IllegalArgumentException("unknown argument " + a
-            + " (use seconds=, out=, only=)");
+            + " (use seconds=, out=, only=, ghosts=, seed=)");
       }
     }
     Files.createDirectories(dir);
     StringBuilder table = new StringBuilder();
     table.append(String.format(Locale.ROOT,
-        "%-34s %6s %6s %6s %5s %5s | %4s %6s %5s %5s %5s | %8s %6s %7s %5s %7s%n",
+        "%-34s %6s %6s %6s %5s %5s | %4s %6s %5s %5s %5s | %8s %6s %7s %5s %7s %8s%n",
         "cap   latency opps   n setup", "peak", "refPk", "after", ">2.5", ">3.0", "late", "chased",
-        "into", "recon", "other", "backoffs", "refPin", "slowed", "grid", "touch_s"));
+        "into", "recon", "other", "backoffs", "refPin", "slowed", "grid", "touch_s", "holdSw/m"));
     Result worst = null;
     int total25 = 0;
     List<Result> results = new ArrayList<>();
     for (Config c : grid()) {
-      if (!c.label().contains(only)) {
+      if (!c.label().contains(only) || (ghosts > 0 && c.count() != ghosts)) {
         continue;
       }
-      Result r = run(c, seconds, true);
+      Result r = run(c, seconds, true, seed);
       results.add(r);
       total25 += r.over25();
       table.append(String.format(Locale.ROOT,
-          "%-34s %6.2f %6.2f %6.2f %5d %5d | %4d %6d %5d %5d %5d | %8d %6d %+6.0f%% %5s %7.1f%n",
+          "%-34s %6.2f %6.2f %6.2f %5d %5d | %4d %6d %5d %5d %5d | %8d %6d %+6.0f%% %5s %7.1f %8.1f%n",
           c.label(), r.peak(), r.refPeak(), r.maxAfterTrigger(), r.over25(), r.over30(), r.late(),
           r.chased(), r.intoOther(), r.recontact(), r.other(), r.backoffs(), r.refPins(),
-          slowedPct(r, seconds), gridlocked(r, seconds) ? "YES" : "-", r.contactSeconds()));
+          slowedPct(r, seconds), gridlocked(r, seconds) ? "YES" : "-", r.contactSeconds(),
+          r.holdSwitches() / (seconds / 60.0)));
       if (worst == null || r.worstPeak() > worst.worstPeak()) {
         worst = r;
       }

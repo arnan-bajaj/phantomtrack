@@ -55,8 +55,18 @@ public final class HoldGroundMode implements DefenseMode {
   @Override
   public Optional<DefenseTarget> compute(DefenseContext ctx) {
     Optional<DefenseTarget> base = inner.compute(ctx);
+    Optional<DefenseTarget> hold = holdTarget(ctx, base);
+    return hold.isPresent() ? hold : base;
+  }
+
+  /**
+   * The push target if the hold rule fires for the inner mode's target {@code base}, otherwise
+   * empty (then {@link #compute} returns {@code base}). Lets the caller tell whether we are
+   * holding without computing the inner mode twice.
+   */
+  public Optional<DefenseTarget> holdTarget(DefenseContext ctx, Optional<DefenseTarget> base) {
     if (base.isEmpty() || base.get().opponentId() < 0) {
-      return base;
+      return Optional.empty();
     }
     TrackedRobot opp = null;
     for (TrackedRobot r : ctx.opponents()) {
@@ -65,7 +75,7 @@ public final class HoldGroundMode implements DefenseMode {
       }
     }
     if (opp == null) {
-      return base;
+      return Optional.empty();
     }
     Vec2 self = ctx.self().position();
     Vec2 oppPos = opp.positionAt(ctx.timeSec());
@@ -73,11 +83,11 @@ public final class HoldGroundMode implements DefenseMode {
     double gap = oppPos.distanceTo(self) - 2.0 * ctx.field().robotHalfSize();
     boolean goalSide = self.distanceTo(goal) < oppPos.distanceTo(goal);
     if (gap > holdGap || !goalSide) {
-      return base;
+      return Optional.empty();
     }
     Vec2 n = oppPos.minus(self).normalized();
     if (n.equals(Vec2.ZERO)) {
-      return base;
+      return Optional.empty();
     }
     return Optional.of(
         new DefenseTarget(

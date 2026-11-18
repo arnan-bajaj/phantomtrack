@@ -40,6 +40,7 @@ public final class SimWorld {
   private final PinTimer refereePins;
   private final Set<Integer> violationCounted = new HashSet<>();
   private int pinViolations = 0;
+  private double peakRefereeContactSeconds = 0.0;
 
   // Recent positions of every robot, so simulated drivers can react to a delayed view.
   private record Snapshot(double time, Map<Integer, Vec2> positions) {}
@@ -200,6 +201,8 @@ public final class SimWorld {
         id -> Contact.effort(self.desiredVelocity(), towardOpp.get(id), self.maxSpeed()) > 0.1);
     double limit = refereePins.rules().limitSeconds();
     for (int id : positions.keySet()) {
+      peakRefereeContactSeconds =
+          Math.max(peakRefereeContactSeconds, refereePins.contactSeconds(id));
       if (!refereePins.episodeOpen(id)) {
         violationCounted.remove(id);
       } else if (refereePins.contactSeconds(id) >= limit && violationCounted.add(id)) {
@@ -331,6 +334,14 @@ public final class SimWorld {
 
   public double timeSec() {
     return timeSec;
+  }
+
+  /**
+   * Longest referee contact time reached in any one pin episode so far (s): the peak of {@link
+   * #refereeContactSeconds} over every opponent and time.
+   */
+  public double peakRefereeContactSeconds() {
+    return peakRefereeContactSeconds;
   }
 
   /** Pin episodes that reached the limit, counting only time we spent driving into them. */
