@@ -18,6 +18,7 @@ import phantom.core.modes.DefenseMode;
 import phantom.core.modes.DefenseTarget;
 import phantom.core.modes.LineMirrorMode;
 import phantom.core.modes.ZoneMode;
+import phantom.core.tracking.MultiTargetTracker;
 import phantom.core.tracking.TrackedRobot;
 import phantom.sim.RobotBody;
 import phantom.sim.SimSession;
@@ -30,6 +31,7 @@ public final class FieldRenderer {
   private static final Color LINES = new Color(0x8a919c);
   private static final Color SELF = new Color(0x3b82f6);
   private static final Color OPP = new Color(0xe5484d);
+  private static final Color PARTNER = new Color(0x22a6c9);
   private static final Color FOCUS = new Color(0xf5c518);
   private static final Color TARGET = new Color(0x30c46b);
   private static final Color GOAL = new Color(0xf08c2e);
@@ -102,8 +104,23 @@ public final class FieldRenderer {
     g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 12));
     g.drawString("GOAL", (float) (goal.x() - 16), (float) (goal.y() - gr - 6));
 
-    // Line from the guarded opponent to the goal (the lane we protect)
-    if (focusId >= 0) {
+    // Line from the guarded opponent to the goal (the lane we protect). With anonymous tracking
+    // the focus is a track id, so the line starts at that track's estimate.
+    boolean anonymous = session.tracking() == SimSession.Tracking.ANONYMOUS;
+    if (focusId >= 0 && anonymous) {
+      for (TrackedRobot t : assist.lastOpponents()) {
+        if (t.id() == focusId) {
+          Vec2 a = sx(t.positionAt(world.timeSec()));
+          g.setColor(FOCUS);
+          Stroke old = g.getStroke();
+          g.setStroke(new BasicStroke(1.5f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f,
+              new float[] {6f, 6f}, 0f));
+          g.draw(new Line2D.Double(a.x(), a.y(), goal.x(), goal.y()));
+          g.setStroke(old);
+        }
+      }
+    }
+    if (focusId >= 0 && !anonymous) {
       for (SimWorld.Opponent o : world.opponents()) {
         if (o.body().id() == focusId) {
           Vec2 a = sx(o.body().position());
@@ -131,6 +148,22 @@ public final class FieldRenderer {
       g.draw(new Line2D.Double(me.x(), me.y(), t.x(), t.y()));
     }
 
+    // Anonymous tracking: tracks that are NOT reported to the defense (tentative, or believed to
+    // be a partner) as thin grey outlines.
+    MultiTargetTracker mtt = session.multiTracker();
+    if (mtt != null) {
+      g.setColor(new Color(0x9a, 0xa1, 0xab, 150));
+      g.setStroke(new BasicStroke(1f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER, 10f,
+          new float[] {2f, 3f}, 0f));
+      for (MultiTargetTracker.TrackView t : mtt.tracks()) {
+        if (!t.reported()) {
+          Vec2 c = sx(t.position().plus(t.velocity().times(world.timeSec() - t.timestampSec())));
+          double h = field.robotHalfSize() * scale * 0.8;
+          g.draw(new Rectangle2D.Double(c.x() - h, c.y() - h, 2 * h, 2 * h));
+        }
+      }
+    }
+
     // What the robot believes (only differs from truth with a noisy sensor): hollow outlines
     if (session.sensor() != SimSession.Sensor.PERFECT) {
       g.setColor(new Color(0xff, 0xa0, 0xa0));
@@ -146,7 +179,23 @@ public final class FieldRenderer {
 
     // Robots
     for (SimWorld.Opponent o : world.opponents()) {
-      drawRobot(g, o.body(), field, OPP, o.body().id() == focusId, "#" + o.body().id());
+      drawRobot(g, o.body(), field, OPP, !anonymous && o.body().id() == focusId,
+          "#" + o.body().id());
+    }
+    for (SimWorld.Opponent p : world.partners()) {
+      drawRobot(g, p.body(), field, PARTNER, false, "ally");
+    }
+
+    // Track ids on top of everything (anonymous tracking: ids mean nothing but continuity)
+    if (anonymous) {
+      g.setColor(new Color(0xff, 0xc0, 0xc0));
+      g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 11));
+      for (TrackedRobot est : assist.lastOpponents()) {
+        Vec2 c = sx(est.positionAt(world.timeSec()));
+        double h = field.robotHalfSize() * scale;
+        g.drawString("T" + (est.id() - SimSession.FIRST_TRACK_ID), (float) (c.x() + h + 3),
+            (float) (c.y() - h + 2));
+      }
     }
     drawRobot(g, world.self(), field, SELF, false, "US");
 
@@ -207,19 +256,29 @@ public final class FieldRenderer {
     DefenseAssist assist = s.assist();
     int y0 = height - HUD_HEIGHT + 4;
 
-    String focus =
-        assist.focusOpponentId() < 0
-            ? "auto" + (focusId >= 0 ? " (#" + focusId + ")" : "")
-            : "#" + assist.focusOpponentId();
+    boolean anonymous = s.tracking() == SimSession.Tracking.ANONYMOUS;
+    String prefix = anonymous ? "T" : "#";
+    int offset = anonymous ? SimSession.FIRST_TRACK_ID : 0;
+    String focus;
+    if (assist.focusOpponentId() == SimSession.NOT_DESIGNATED) {
+      focus = "#0, waiting for a track";
+    } else if (assist.focusOpponentId() < 0) {
+      focus = "auto" + (focusId >= 0 ? " (" + prefix + (focusId - offset) + ")" : "");
+    } else {
+      focus = prefix + (assist.focusOpponentId() - offset)
+          + (s.lockedOpponent() >= 0 ? " (on #" + s.lockedOpponent() + ")" : "");
+    }
     String line1 =
         String.format(
-            "t = %.1f s   |   Mode: %s   |   Assist: %s   |   Focus: %s   |   Opponents: %s   |   Sensor: %s   |   Field: %s%s",
+            "t = %.1f s   |   Mode: %s   |   Assist: %s   |   Focus: %s   |   Opponents: %s   |   Sensor: %s, %s   |   Partners: %s   |   Field: %s%s",
             world.timeSec(),
             assist.activeMode().name() + (assist.holdEnabled() ? " + hold" : ""),
             assist.lastState(),
             focus,
             world.opponents().isEmpty() ? "-" : world.opponents().get(0).behavior().name(),
             s.sensor().label(),
+            s.sensor() == SimSession.Sensor.PERFECT ? "true ids" : s.tracking().label(),
+            world.partners().isEmpty() ? "off" : world.partners().size(),
             world.field().name(),
             paused ? "   |   PAUSED" : "");
 
@@ -237,8 +296,12 @@ public final class FieldRenderer {
             world.selfContactSeconds(),
             world.pinViolations(),
             assist.backoffsTriggered());
+    if (anonymous) {
+      line2 += String.format("   |   ID switches: %d   |   Re-points: %d",
+          m.idSwitches(), s.redesignations());
+    }
     String line3 =
-        "WASD drive   J/L turn   SPACE = assist   M / 1-5 = mode   H = hold   F = focus   O = opponents   N = sensor   G = field   P = pause   R = reset";
+        "WASD drive   J/L turn   SPACE = assist   M / 1-5 = mode   H = hold   F = focus   O = opponents   N = sensor   T = tracking   B = partners   G = field   P = pause   R = reset";
 
     g.setFont(new Font(Font.SANS_SERIF, Font.BOLD, 14));
     g.setColor(TEXT);

@@ -1,0 +1,28 @@
+=== Contact study: 180 s per run, 10 seeds, guarding #0 ===
+Layout     Opps    Setup               Sensor       Slowed  Pins/run Max pins    Runs>0  Back-offs   Press s     FP s   Miss s
+Open       Cycler  Line mirror + hold  Realistic    +26.8%      0.00        0      0/10       20.0      48.4     12.4      2.5
+Open       Cycler  Line mirror + hold  Bad          +11.2%      0.00        0      0/10        8.0      35.8     12.8      6.6
+Open       Cycler  Cut-off + hold      Realistic    +25.3%      0.20        1      2/10       20.3      53.1     14.7      5.5
+Open       Cycler  Cut-off + hold      Bad          +11.5%      0.10        1      1/10       13.3      36.4     11.5      6.6
+Open       Evader  Line mirror + hold  Realistic    +17.7%      0.00        0      0/10        8.0      28.6     17.3      1.7
+Open       Evader  Line mirror + hold  Bad          +11.2%      0.00        0      0/10        0.1      11.4     21.4      2.6
+Open       Evader  Cut-off + hold      Realistic    +14.5%      0.00        0      0/10        4.4      24.7     16.2      3.0
+Open       Evader  Cut-off + hold      Bad           +8.6%      0.00        0      0/10        0.1      11.4     20.5      3.4
+Choke      Cycler  Line mirror + hold  Realistic    +31.7%      0.10        1      1/10       25.0      54.1     12.8      3.6
+Choke      Cycler  Line mirror + hold  Bad          +19.5%      0.40        3      2/10       13.3      45.9     11.2     10.3
+Choke      Cycler  Cut-off + hold      Realistic    +26.7%      0.30        1      3/10       25.3      59.6     12.3      5.2
+Choke      Cycler  Cut-off + hold      Bad          +17.2%      0.30        3      1/10       17.0      45.7     11.6      9.1
+Choke      Evader  Line mirror + hold  Realistic    +34.9%      0.20        1      2/10       20.4      45.4     15.7      3.7
+Choke      Evader  Line mirror + hold  Bad          +20.9%      0.10        1      1/10        6.7      26.2     21.0      5.4
+Choke      Evader  Cut-off + hold      Realistic    +45.8%      0.20        1      2/10       21.5      45.2     21.1      4.1
+Choke      Evader  Cut-off + hold      Bad          +20.5%      0.10        1      1/10        7.9      22.3     24.4      4.3
+Two lanes  Cycler  Line mirror + hold  Realistic    +28.8%      0.30        1      3/10       20.6      39.0     18.0      2.6
+Two lanes  Cycler  Line mirror + hold  Bad          +17.6%      0.30        1      3/10        6.0      24.0     12.1      5.5
+Two lanes  Cycler  Cut-off + hold      Realistic    +42.3%      0.10        1      1/10       24.2      52.2     11.9      3.1
+Two lanes  Cycler  Cut-off + hold      Bad          +25.7%      0.10        1      1/10        7.8      25.0      8.4      4.3
+Two lanes  Evader  Line mirror + hold  Realistic    +33.8%      0.00        0      0/10        6.0      23.3     17.3      2.3
+Two lanes  Evader  Line mirror + hold  Bad          +14.9%      0.00        0      0/10        1.3      11.4     11.9      2.4
+Two lanes  Evader  Cut-off + hold      Realistic    +37.7%      0.10        1      1/10        8.5      28.9     16.2      2.5
+Two lanes  Evader  Cut-off + hold      Bad          +11.4%      0.00        0      0/10        1.1       9.2     10.8      2.3
+
+Total: 29 pins in 240 runs (0.12 per run). Per run: pressing 33.6 s, false positive 15.2 s, missed 4.3 s. CSV: results/after.csv

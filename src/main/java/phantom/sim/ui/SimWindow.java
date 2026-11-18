@@ -25,6 +25,8 @@ public final class SimWindow extends JPanel {
   private final Set<Integer> keysDown = new HashSet<>();
   private Scenarios.OpponentKind kind = Scenarios.OpponentKind.CYCLER;
   private SimSession.Sensor sensor = SimSession.Sensor.PERFECT;
+  private SimSession.Tracking tracking = SimSession.Tracking.KNOWN_ID;
+  private boolean partners = false;
   private Scenarios.Layout layout = Scenarios.Layout.OPEN;
   private long seed = 1;
   private SimSession session = withBestDefaults(SimSession.standard(kind, sensor, seed));
@@ -33,7 +35,7 @@ public final class SimWindow extends JPanel {
   private static SimSession withBestDefaults(SimSession s) {
     s.assist().setModeIndex(0);
     s.assist().setHoldEnabled(true);
-    s.assist().setFocusOpponentId(0);
+    s.lockOn(0);
     return s;
   }
   private boolean paused = false;
@@ -55,6 +57,14 @@ public final class SimWindow extends JPanel {
               }
               case KeyEvent.VK_N -> {
                 sensor = sensor.next();
+                reset();
+              }
+              case KeyEvent.VK_T -> {
+                tracking = tracking.next();
+                reset();
+              }
+              case KeyEvent.VK_B -> {
+                partners = !partners;
                 reset();
               }
               case KeyEvent.VK_O -> {
@@ -97,17 +107,38 @@ public final class SimWindow extends JPanel {
   /** Restart the scenario, keeping the selected mode and focus. */
   private void reset() {
     int mode = session.assist().modeIndex();
-    int focus = session.assist().focusOpponentId();
+    boolean locked = session.lockedOpponent() >= 0
+        || (session.tracking() != SimSession.Tracking.ANONYMOUS
+            && session.assist().focusOpponentId() >= 0);
+    int lockIndex = Math.max(0, session.lockedOpponent() >= 0
+        ? session.lockedOpponent() : session.assist().focusOpponentId());
     boolean hold = session.assist().holdEnabled();
     seed++; // a fresh noise pattern each reset
-    session = SimSession.standard(kind, sensor, seed, layout);
+    session = SimSession.standard(kind, sensor, seed, layout, partners, tracking,
+        SimSession.Variant.STANDARD);
     session.assist().setModeIndex(mode);
-    session.assist().setFocusOpponentId(focus);
+    if (locked && lockIndex < session.world().opponents().size()) {
+      session.lockOn(lockIndex);
+    } else {
+      session.autoFocus();
+    }
     session.assist().setHoldEnabled(hold);
   }
 
-  /** Cycle focus: auto -> #0 -> #1 -> ... -> auto. */
+  /**
+   * Cycle focus: auto -> #0 -> #1 -> ... -> auto. With anonymous tracking the assist only knows
+   * track ids, so "#k" means: a simulated driver keeps pointing it at the track on opponent #k.
+   */
   private void cycleFocus() {
+    if (session.tracking() == SimSession.Tracking.ANONYMOUS) {
+      int next = session.lockedOpponent() + 1;
+      if (next >= session.world().opponents().size()) {
+        session.autoFocus();
+      } else {
+        session.lockOn(next);
+      }
+      return;
+    }
     var opps = session.world().opponents();
     int current = session.assist().focusOpponentId();
     int idx = -1;

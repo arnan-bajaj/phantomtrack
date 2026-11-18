@@ -145,11 +145,17 @@ class PinAndHoldTest {
     }
     assertTrue(guard.backingOff());
     assertEquals(1, guard.backoffsTriggered());
-    // stopped opponent -> d = unit((5,4) - (5.9,4)) = (-1,0)
-    // p* = (5,4) + 1.0*(-1,0) = (4,4), v_ff = 3.0*(-1,0)
-    assertEquals(4.0, out.orElseThrow().position().x(), TOL);
-    assertEquals(4.0, out.orElseThrow().position().y(), TOL);
-    assertEquals(-3.0, out.orElseThrow().velocityFeedforward().x(), TOL);
+    // EscapePlanner, stopped opponent: away = unit((5,4) - (5.9,4)) = (-1,0), path axis a = away
+    // LEFT = (-a.y, a.x) = (0,-1), RIGHT = (0,1), BACK = (-1,0); look-ahead D = 3.0 * 0.5 = 1.5 m
+    // ends: LEFT (5,2.5), RIGHT (5,5.5), BACK (3.5,4)
+    // leaves path? |a x (end - opp)|: LEFT |(-1)(-1.5) - 0| = 1.5 >= 0.9 yes, RIGHT 1.5 yes, BACK 0 no
+    // clearance (20x20 field): LEFT min y 2.5 - 0.45 = 2.05, RIGHT 20 - 5.5 - 0.45 = 14.05 -> both
+    // capped at 1.0; lateral 1.5 = 1.5 -> tie -> LEFT (first in order)
+    // p* = (5,4) + 1.0*(0,-1) = (5,3), v_ff = 3.0*(0,-1) = (0,-3)
+    assertEquals(5.0, out.orElseThrow().position().x(), TOL);
+    assertEquals(3.0, out.orElseThrow().position().y(), TOL);
+    assertEquals(0.0, out.orElseThrow().velocityFeedforward().x(), TOL);
+    assertEquals(-3.0, out.orElseThrow().velocityFeedforward().y(), TOL);
   }
 
   @Test

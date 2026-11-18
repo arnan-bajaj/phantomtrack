@@ -15,6 +15,8 @@ You need Java 17 or newer. The JDK that comes with WPILib works.
 ./gradlew run --args="--headless"      # 180 s: no defense vs. every mode, both opponent types; saves snapshots/*.png
 ./gradlew run --args="--batch"         # every setup x opponents x sensor x 3 seeds -> results/batch.csv
 ./gradlew run --args="--batch 180 10"  # same, 180 s per run, 10 seeds
+./gradlew run --args="--anonymous"     # anonymous camera vs known ids, partners on (see docs/findings/)
+./gradlew run --args="--tracker-sweep" # how the multi-target tracker's settings were chosen
 ./gradlew test                         # unit tests
 ```
 
@@ -32,9 +34,11 @@ terminal.
 | W A S D | drive (field-relative, full speed) |
 | J / L | turn left / right |
 | hold SPACE | engage the defense assist |
-| F | cycle focus opponent: auto → #0 → #1 → #2 → auto |
+| F | cycle focus opponent: auto → #0 → #1 → #2 → auto (anonymous tracking: a simulated driver keeps the assist on that robot's track) |
 | O | switch opponent type (Cycler ↔ Evader) and restart |
 | N | switch sensor: Perfect → Realistic → Bad camera, and restart |
+| T | switch tracking: known ids → known ids + occlusion → anonymous (multi-target tracker), and restart |
+| B | two alliance partners on / off, and restart |
 | G | switch field: Open → Choke (one gap) → Two lanes, and restart |
 | M | next defense mode |
 | H | toggle **hold ground** (stop retreating on contact, push back) |
@@ -81,6 +85,8 @@ src/main/java/phantom/
                    Obstacle: wall rectangle (collision, push-out, path-blocked checks)
     tracking/      TrackedRobot, OpponentTracker  <- the ONLY way defense code sees opponents
                    Measurement, MeasurementSource, AxisKalman, KalmanOpponentTracker (noisy sightings -> tracks)
+                   Detection, DetectionFrame, MultiTargetTracker (anonymous detections -> tracks), with
+                   Hungarian (assignment), Gating (Mahalanobis), ColorBelief (alliance color), MOfN
     modes/         DefenseMode interface + Shadow, Interpose, Zone, LineMirror, Cutoff modes
     prediction/    IntentPredictor: opponent destination + route (game knowledge, no ML)
     control/       HolonomicController (target -> velocity), DriverBlend (driver override), RulesGuard (pin limit)
@@ -96,6 +102,8 @@ src/main/java/phantom/
     SimWorld       ground truth + collisions
     PerfectTracker OpponentTracker that reports exact truth
     NoisySensor    simulated camera: FOV, range, noise, latency, dropouts (feeds KalmanOpponentTracker)
+    AnonymousSensor the same camera without ids: partners, color errors, clutter, occlusion
+                   (feeds MultiTargetTracker); Scenarios can add two alliance partners
     BatchRunner    every combination x seeds -> CSV for graphing
     ui/            Swing window + renderer
 ```
@@ -115,6 +123,8 @@ over NetworkTables, then vision. Nothing in `core/modes` or `core/control` chang
 - [x] Phase 6: batch runs with CSV metrics (`--batch`)
 - [x] Human reaction delay for Evaders; walls, chokepoints and lanes; gate routing for both sides
 - [x] Route prediction (IntentPredictor) and Cut-off mode
+- [x] Anonymous detections (partners, color errors, clutter, occlusion) + multi-target tracker:
+      see [docs/findings/anonymous-tracking.md](docs/findings/anonymous-tracking.md)
 - [ ] Phase 7: real robot (AprilTag pose) with simulated ghost opponents
 - [ ] Phase 8: vision-based opponent tracking
 
