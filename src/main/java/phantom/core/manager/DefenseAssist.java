@@ -1,5 +1,6 @@
 package phantom.core.manager;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import phantom.core.control.ChassisCommand;
@@ -29,6 +30,9 @@ import phantom.core.tracking.TrackedRobot;
  * </pre>
  *
  * The same object will run inside the robot's teleop loop later; only the tracker changes.
+ *
+ * <p>Tracks with a NaN or infinite position, velocity or time are dropped before anything else
+ * sees them, whatever the tracker: a NaN must never reach a command.
  */
 public final class DefenseAssist {
   /** What happened on the last update, for logging and the sim HUD. */
@@ -91,7 +95,7 @@ public final class DefenseAssist {
    */
   public ChassisCommand update(
       double nowSec, Pose self, Vec2 selfVelocity, ChassisCommand driver, boolean engaged) {
-    List<TrackedRobot> opponents = tracker.getOpponents(nowSec);
+    List<TrackedRobot> opponents = finiteOnly(tracker.getOpponents(nowSec));
     lastOpponents = opponents;
     int focus = focusOpponentId;
     if (focus < 0 && useThreatSelector) {
@@ -110,6 +114,20 @@ public final class DefenseAssist {
     driveTelemetry = null; // used once: a stale sample must never be mistaken for a fresh one
     lastCommand = decide(nowSec, self, driver, engaged);
     return lastCommand;
+  }
+
+  /** The tracks whose position, velocity and time are all finite numbers. */
+  static List<TrackedRobot> finiteOnly(List<TrackedRobot> tracks) {
+    List<TrackedRobot> out = new ArrayList<>(tracks.size());
+    for (TrackedRobot r : tracks) {
+      if (r != null
+          && r.position().isFinite()
+          && r.velocity().isFinite()
+          && Double.isFinite(r.timestampSec())) {
+        out.add(r);
+      }
+    }
+    return out;
   }
 
   private ChassisCommand decide(double nowSec, Pose self, ChassisCommand driver, boolean engaged) {

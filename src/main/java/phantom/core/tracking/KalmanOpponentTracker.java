@@ -16,6 +16,8 @@ import phantom.core.geometry.Vec2;
  *       predicted to the capture time, updated, and the returned {@link TrackedRobot} carries that
  *       timestamp. Modes call {@code positionAt(now)} to extrapolate to the present.
  *   <li>Sightings older than the track's latest are ignored (out of order).
+ *   <li>Sightings with a NaN or infinite position or time are ignored: a NaN that got into the
+ *       filter would stay there for good (and reach the command).
  *   <li>Tracks with no sighting for {@code maxAgeSec} are dropped. Confidence = 1 - age / maxAge.
  * </ul>
  */
@@ -62,6 +64,9 @@ public final class KalmanOpponentTracker implements OpponentTracker {
     ms.sort(Comparator.comparingDouble(Measurement::timestampSec));
     double r = measurementStd * measurementStd;
     for (Measurement m : ms) {
+      if (!m.position().isFinite() || !Double.isFinite(m.timestampSec())) {
+        continue; // never let a NaN into a filter
+      }
       Track t = tracks.get(m.id());
       if (t == null) {
         // New track: trust the position, assume unknown velocity (std 2 m/s).
