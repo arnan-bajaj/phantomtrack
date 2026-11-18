@@ -13,7 +13,8 @@ import phantom.core.tracking.TrackedRobot;
  *   gap      = |p_opp - p_self| - 2 * robotHalfSize
  *   hold if  gap <= holdGap  and  |p_self - goal| < |p_opp - goal|
  *   n        = unit(p_opp - p_self)
- *   p*       = p_self + 0.3 * n
+ *   p*       = clampInside(p_self + 0.3 * n)   (like every mode's target: pushing around a wall
+ *                                              corner, p_self + 0.3 n can be inside the wall)
  *   v_ff     = pushSpeed * n          (drive into them at full effort so a pushing match stalls)
  *   heading  = angle(n)               (face them)
  * </pre>
@@ -79,6 +80,10 @@ public final class HoldGroundMode implements DefenseMode {
       return base;
     }
     return Optional.of(
-        new DefenseTarget(self.plus(n.times(STEP)), n.angle(), n.times(pushSpeed), opp.id()));
+        new DefenseTarget(
+            ctx.field().clampInside(self.plus(n.times(STEP))),
+            n.angle(),
+            n.times(pushSpeed),
+            opp.id()));
   }
 }
