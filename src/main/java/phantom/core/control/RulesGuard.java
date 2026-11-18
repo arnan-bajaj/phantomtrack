@@ -58,7 +58,9 @@ import phantom.core.tracking.TrackedRobot;
  *   {@link #safetyMarginFor}: slack + latency + one loop + time to slide one robot width out at
  *   this robot's speed and acceleration), until a fresh estimate says gap >= resetSeparation
  *   (the episode itself stays open until the extra RESET_MARGIN, so touching again re-triggers
- *   at once), the episode ends, or MAX_BACKOFF_SECONDS pass.
+ *   at once) or the episode ends. There is no time limit: an open episode's time never goes
+ *   down, so ending the back-off early would only hand control back to the mode with the pin
+ *   time still over the threshold (the old 3 s limit re-triggered in the same loop).
  *
  *   Which way: {@link EscapePlanner} with every robot we see, predicted over the look-ahead
  *     D = max(v * LOOKAHEAD_SECONDS, 2 * robotHalfSize + CONTACT_TOLERANCE),
@@ -84,7 +86,6 @@ import phantom.core.tracking.TrackedRobot;
  * Stateful on purpose (it measures time), so it lives here and not in a DefenseMode.
  */
 public final class RulesGuard {
-  public static final double MAX_BACKOFF_SECONDS = 3.0;
   public static final double STEP = 1.0;
   public static final double BACKOFF_SPEED = 3.0;
 
@@ -359,7 +360,7 @@ public final class RulesGuard {
 
     updateTimers(nowSec, selfPos, est, positions, ages, unknownContact);
 
-    // Finish back-offs whose episode ended, that are far enough apart, or that timed out.
+    // Finish back-offs whose episode ended or that are far enough apart.
     double rule = pinTimer.rules().resetSeparation();
     backoffStarts
         .entrySet()
@@ -373,9 +374,7 @@ public final class RulesGuard {
               if (apart) {
                 released.add(id);
               }
-              return !pinTimer.episodeOpen(id)
-                  || apart
-                  || nowSec - e.getValue() >= MAX_BACKOFF_SECONDS;
+              return !pinTimer.episodeOpen(id) || apart;
             });
     released.removeIf(id -> !pinTimer.episodeOpen(id));
 
@@ -682,6 +681,7 @@ public final class RulesGuard {
     return backingOff() ? Optional.ofNullable(escapeOption) : Optional.empty();
   }
 
+  /** Times the guard started backing off from an episode (one per back-off, however long). */
   public int backoffsTriggered() {
     return backoffsTriggered;
   }

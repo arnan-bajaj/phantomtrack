@@ -214,6 +214,23 @@ class CrowdEscapeTest {
     assertTrue(slide.position().isFinite() && slide.velocityFeedforward().isFinite());
   }
 
+  @Test
+  void aLongBackOffIsOneBackOff() {
+    // Audit L1. Same corner as above, but held for 6 s. Both episodes pass the trigger at 2.56 s
+    // (2 back-offs) and stay open and over it (nobody moves). The old 3 s "timeout" removed each
+    // back-off at 5.56 s and the trigger re-added it in the same loop, counting it again: 4. A
+    // back-off lasts while its episode is open and over the threshold; it is counted once.
+    var f = new FieldConfig(20, 20, new Vec2(0, 4), List.of(), 0.45);
+    var guard = new RulesGuard(new PinRules(3.0, 1.83), f, 0.5);
+    Pose self = new Pose(5, 4, 0);
+    for (int i = 0; i <= 300; i++) { // to 6.00 s
+      double t = i * 0.02;
+      guard.apply(t, self, opponents(t), Optional.empty());
+    }
+    assertTrue(guard.backingOff());
+    assertEquals(2, guard.backoffsTriggered());
+  }
+
   private static List<TrackedRobot> opponents(double t) {
     return List.of(
         new TrackedRobot(0, new Vec2(5.9, 4), Vec2.ZERO, t, 1.0),
