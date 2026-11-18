@@ -1,0 +1,228 @@
+=== 180 s, 3 Cycler (push through) opponents (guarding #0) ===
+Setup                               Guarded cyc   Slowed    Total   Contact   Pins  Back-offs
+No defense                               7.15 s        -       76     0.0 s      0          0
+Shadow                                   7.19 s      +1%       76     8.7 s      0          5
+Shadow + hold                            8.36 s     +17%       72    46.3 s      0         22
+Interpose                                7.08 s      -1%       77     6.0 s      0          0
+Interpose + hold                         6.99 s      -2%       79     8.7 s      0          1
+Zone                                     7.36 s      +3%       74    35.3 s      0          0
+Zone + hold                              7.60 s      +6%       72    59.5 s      0         34
+Line mirror                              9.17 s     +28%       72    50.3 s      0         23
+Line mirror + hold                       9.18 s     +28%       73    49.0 s      0         24
+Cut-off                                  9.44 s     +32%       70    64.2 s      0         26
+Cut-off + hold                           9.88 s     +38%       70    60.0 s      0         19
+Shadow + hold, NO pin guard              9.48 s     +33%       56   163.0 s      2          0
+Interpose + hold, NO pin guard           7.07 s      -1%       79    11.3 s      1          0
+Zone + hold, NO pin guard                7.52 s      +5%       70    81.4 s      9          0
+Line mirror + hold, NO pin guard        10.80 s     +51%       70    69.9 s     17          0
+Cut-off + hold, NO pin guard            11.13 s     +56%       68    88.6 s     16          0
+Snapshots: snapshots/cycler-*.png
+
+=== 180 s, 3 Evader (dodge defenders) opponents (guarding #0) ===
+Setup                               Guarded cyc   Slowed    Total   Contact   Pins  Back-offs
+No defense                               7.15 s        -       78     0.0 s      0          0
+Shadow                                   9.01 s     +26%       70     4.6 s      0          3
+Shadow + hold                            8.57 s     +20%       72    36.1 s      0         20
+Interpose                                7.18 s      +0%       76     0.4 s      0          0
+Interpose + hold                         7.17 s      +0%       76     1.8 s      0          0
+Zone                                     7.48 s      +4%       73     7.7 s      0          1
+Zone + hold                              7.56 s      +6%       73    39.3 s      0         12
+Line mirror                              9.86 s     +38%       68    43.1 s      0         23
+Line mirror + hold                       9.68 s     +35%       70    32.3 s      0         20
+Cut-off                                  7.72 s      +8%       72    11.0 s      0          0
+Cut-off + hold                           8.15 s     +14%       73    23.9 s      0          3
+Shadow + hold, NO pin guard              9.89 s     +38%       70    57.8 s      7          0
+Interpose + hold, NO pin guard           7.17 s      +0%       76     1.8 s      0          0
+Zone + hold, NO pin guard                7.60 s      +6%       74    36.3 s      0          0
+Line mirror + hold, NO pin guard        10.35 s     +45%       68    54.3 s      0          0
+Cut-off + hold, NO pin guard             8.01 s     +12%       74    23.1 s      0          0
+Snapshots: snapshots/evader-*.png
+
+=== Tracking quality: 180 s, guarding #0, noisy rows averaged over 5 seeds ===
+Opponents  Setup                  Sensor       Slowed   Pins   Est. err  Coverage
+Cycler     Shadow + hold          Perfect        +17%      0          0      100%
+Cycler     Shadow + hold          Realistic      +18%    0.0     0.39 m       60%
+Cycler     Shadow + hold          Bad            +10%    0.0     0.94 m       36%
+Cycler     Line mirror + hold     Perfect        +28%      0          0      100%
+Cycler     Line mirror + hold     Realistic      +24%    0.0     0.37 m       73%
+Cycler     Line mirror + hold     Bad            +12%    0.0     0.94 m       43%
+Evader     Shadow + hold          Perfect        +20%      0          0      100%
+Evader     Shadow + hold          Realistic      +17%    0.0     0.44 m       51%
+Evader     Shadow + hold          Bad            +11%    0.0     0.97 m       31%
+Evader     Line mirror + hold     Perfect        +35%      0          0      100%
+Evader     Line mirror + hold     Realistic      +17%    0.0     0.43 m       75%
+Evader     Line mirror + hold     Bad             +9%    0.0     1.07 m       37%
+
+=== Auto focus (no opponent chosen): 180 s, effect on ALL opponents ===
+Opponents  Setup                                 Total cyc   Slowed Changes/min   Pins
+Cycler     No defense                                   76        -          -      0
+Cycler     Shadow + hold, locked on #0                  72      +6%        1.3      0
+Cycler     Shadow + hold, auto=nearest                  73      +4%       17.7      0
+Cycler     Shadow + hold, auto=threat                   69     +10%       23.7      0
+Cycler     Line mirror + hold, locked on #0             73      +4%        0.7      0
+Cycler     Line mirror + hold, auto=nearest             71      +7%       35.0      0
+Cycler     Line mirror + hold, auto=threat              67     +13%       30.7      0
+Evader     No defense                                   78        -          -      0
+Evader     Shadow + hold, locked on #0                  72      +8%        0.7      0
+Evader     Shadow + hold, auto=nearest                  70     +11%       19.7      0
+Evader     Shadow + hold, auto=threat                   75      +4%       20.0      0
+Evader     Line mirror + hold, locked on #0             70     +11%        0.7      0
+Evader     Line mirror + hold, auto=nearest             70     +11%       25.7      0
+Evader     Line mirror + hold, auto=threat              69     +13%       23.3      0
+
+=== Field layouts: 180 s, perfect tracking, guarded opp slowed (all-opp slowed) ===
+Opps     Setup                                            Open               Choke           Two lanes   Pins
+Cycler   Shadow + hold, locked #0                   +17% (+6%)          +14% (+8%)         +33% (+10%)      0
+Cycler   Interpose + hold, locked #0                 -2% (-4%)           +5% (+4%)         +33% (+14%)      0
+Cycler   Zone + hold                                 +6% (+6%)           +6% (+6%)          +16% (+7%)      0
+Cycler   Line mirror + hold, locked #0              +28% (+4%)         +41% (+17%)         +50% (+17%)      0
+Cycler   Line mirror + hold, auto=threat           +12% (+13%)         +16% (+11%)          +7% (+19%)      0
+Cycler   Cut-off + hold, locked #0                  +38% (+9%)         +34% (+11%)          +38% (+9%)      0
+Cycler     baseline cycle time                          7.15 s              7.69 s              7.43 s
+Evader   Shadow + hold, locked #0                   +20% (+8%)         +21% (+14%)         +46% (+19%)      0
+Evader   Interpose + hold, locked #0                 +0% (+3%)          +2% (+10%)          +21% (+5%)      0
+Evader   Zone + hold                                 +6% (+7%)           -3% (+2%)           +8% (+3%)      0
+Evader   Line mirror + hold, locked #0             +35% (+11%)         +47% (+26%)         +88% (+24%)      0
+Evader   Line mirror + hold, auto=threat           +12% (+13%)         +20% (+20%)         +39% (+21%)      0
+Evader   Cut-off + hold, locked #0                  +14% (+7%)         +30% (+20%)          +19% (+7%)      0
+Evader     baseline cycle time                          7.15 s              8.52 s              8.30 s
+
+=== Anonymous tracking, defense: 180 s, 2 alliance partners on the field, camera rows averaged over 5 seeds ===
+Slowed = guarded opponent #0 +- standard error over seeds (all opponents' cycles). PtnrCt = s/run our robot touched a partner. Aim none/ptnr = s/min the assist reacted to a track on no robot / on a partner. Repnt/m = times/min the driver re-points the locked assist.
+Opps    Field  Setup                           Sensor    Tracking            Slowed   (all)  Pins  PtnrCt  Aim none/ptnr Repnt/m
+Cycler  Open   Line mirror + hold, auto=threat Perfect   -                  +7% +--    +12%   0.0     1.8      0.0 / 0.0       -
+Cycler  Open   Line mirror + hold, auto=threat Realistic Known-ID          +11% +-2    +13%   0.0     3.5      1.3 / 0.0       -
+Cycler  Open   Line mirror + hold, auto=threat Realistic Known+occ          +9% +-1    +11%   0.0     4.2      1.3 / 0.1       -
+Cycler  Open   Line mirror + hold, auto=threat Realistic Anonymous         +11% +-1    +11%   0.0     4.3      4.0 / 0.5     0.0
+Cycler  Open   Line mirror + hold, auto=threat Bad       Known-ID          +11% +-2    +11%   0.6     3.0      5.2 / 0.8       -
+Cycler  Open   Line mirror + hold, auto=threat Bad       Known+occ          +8% +-2    +10%   0.2     3.7      7.0 / 0.7       -
+Cycler  Open   Line mirror + hold, auto=threat Bad       Anonymous          +6% +-1     +8%   0.0     4.6     18.9 / 2.7     0.0
+Cycler  Open   Cut-off + hold, locked #0       Perfect   -                 +31% +--    +12%   0.0     6.2      0.0 / 0.0       -
+Cycler  Open   Cut-off + hold, locked #0       Realistic Known-ID          +22% +-1    +11%   0.0     2.9      3.2 / 0.0       -
+Cycler  Open   Cut-off + hold, locked #0       Realistic Known+occ         +21% +-1    +10%   0.0     3.9      3.5 / 0.1       -
+Cycler  Open   Cut-off + hold, locked #0       Realistic Anonymous         +14% +-1    +10%   0.0     2.8      4.8 / 0.4    10.5
+Cycler  Open   Cut-off + hold, locked #0       Bad       Known-ID          +11% +-1    +11%   0.0     2.3      3.0 / 0.5       -
+Cycler  Open   Cut-off + hold, locked #0       Bad       Known+occ          +8% +-1     +9%   0.0     3.0      2.9 / 0.4       -
+Cycler  Open   Cut-off + hold, locked #0       Bad       Anonymous          +6% +-1     +9%   0.2     1.6      7.8 / 0.7     5.1
+Cycler  Choke  Line mirror + hold, auto=threat Perfect   -                 +21% +--    +21%   0.0    18.6      0.0 / 0.0       -
+Cycler  Choke  Line mirror + hold, auto=threat Realistic Known-ID          +20% +-2    +16%   0.0    18.4      0.9 / 0.2       -
+Cycler  Choke  Line mirror + hold, auto=threat Realistic Known+occ         +14% +-3    +15%   0.2    15.3      1.3 / 0.4       -
+Cycler  Choke  Line mirror + hold, auto=threat Realistic Anonymous         +15% +-6    +13%   0.2    13.7      3.8 / 1.1     0.0
+Cycler  Choke  Line mirror + hold, auto=threat Bad       Known-ID          +17% +-4    +16%   0.0    19.2      4.2 / 1.6       -
+Cycler  Choke  Line mirror + hold, auto=threat Bad       Known+occ         +13% +-4    +14%   0.2    17.1      4.7 / 1.5       -
+Cycler  Choke  Line mirror + hold, auto=threat Bad       Anonymous         +13% +-3    +10%   0.4    15.4     15.6 / 3.9     0.0
+Cycler  Choke  Cut-off + hold, locked #0       Perfect   -                 +29% +--    +17%   0.0    12.0      0.0 / 0.0       -
+Cycler  Choke  Cut-off + hold, locked #0       Realistic Known-ID          +25% +-3    +18%   0.0    16.2      2.2 / 0.2       -
+Cycler  Choke  Cut-off + hold, locked #0       Realistic Known+occ         +28% +-5    +16%   0.4    14.0      2.2 / 0.3       -
+Cycler  Choke  Cut-off + hold, locked #0       Realistic Anonymous         +18% +-2    +16%   0.2    12.5      4.0 / 1.1     9.7
+Cycler  Choke  Cut-off + hold, locked #0       Bad       Known-ID          +18% +-3    +16%   0.0    10.6      2.5 / 1.6       -
+Cycler  Choke  Cut-off + hold, locked #0       Bad       Known+occ         +16% +-2    +13%   0.0     8.9      2.9 / 0.9       -
+Cycler  Choke  Cut-off + hold, locked #0       Bad       Anonymous         +25% +-8    +23%   0.4    18.4      8.4 / 1.8     4.5
+Evader  Open   Line mirror + hold, auto=threat Perfect   -                 +17% +--    +14%   0.0     3.5      0.0 / 0.0       -
+Evader  Open   Line mirror + hold, auto=threat Realistic Known-ID          +10% +-1    +11%   0.0     4.5      1.3 / 0.1       -
+Evader  Open   Line mirror + hold, auto=threat Realistic Known+occ         +12% +-2    +10%   0.0     5.1      1.4 / 0.3       -
+Evader  Open   Line mirror + hold, auto=threat Realistic Anonymous         +10% +-1    +10%   0.0     4.4      3.3 / 0.6     0.0
+Evader  Open   Line mirror + hold, auto=threat Bad       Known-ID           +9% +-1     +8%   0.0     4.5      8.8 / 1.1       -
+Evader  Open   Line mirror + hold, auto=threat Bad       Known+occ         +12% +-2     +9%   0.0     3.7      8.8 / 1.3       -
+Evader  Open   Line mirror + hold, auto=threat Bad       Anonymous         +12% +-1     +8%   0.0     4.8     19.9 / 2.9     0.0
+Evader  Open   Cut-off + hold, locked #0       Perfect   -                 +18% +--     +7%   0.0     4.1      0.0 / 0.0       -
+Evader  Open   Cut-off + hold, locked #0       Realistic Known-ID          +18% +-1     +7%   0.0     2.6      5.2 / 0.2       -
+Evader  Open   Cut-off + hold, locked #0       Realistic Known+occ         +19% +-1     +9%   0.0     2.6      4.9 / 0.5       -
+Evader  Open   Cut-off + hold, locked #0       Realistic Anonymous         +18% +-1     +9%   0.0     2.0      5.5 / 0.9     8.7
+Evader  Open   Cut-off + hold, locked #0       Bad       Known-ID           +8% +-1     +6%   0.0     2.2      4.6 / 0.5       -
+Evader  Open   Cut-off + hold, locked #0       Bad       Known+occ          +9% +-2     +7%   0.0     1.4      4.6 / 0.4       -
+Evader  Open   Cut-off + hold, locked #0       Bad       Anonymous          +6% +-1     +6%   0.0     0.9      8.4 / 1.7     4.8
+Evader  Choke  Line mirror + hold, auto=threat Perfect   -                 +48% +--    +27%   0.0    26.3      0.0 / 0.0       -
+Evader  Choke  Line mirror + hold, auto=threat Realistic Known-ID          +24% +-7    +16%   0.0    23.1      1.2 / 0.4       -
+Evader  Choke  Line mirror + hold, auto=threat Realistic Known+occ          +8% +-4     +4%   0.0    16.0      1.6 / 0.3       -
+Evader  Choke  Line mirror + hold, auto=threat Realistic Anonymous          -1% +-2     -4%   0.2    14.7      4.6 / 1.5     0.0
+Evader  Choke  Line mirror + hold, auto=threat Bad       Known-ID           +3% +-2     +1%   0.0    18.8      5.0 / 2.1       -
+Evader  Choke  Line mirror + hold, auto=threat Bad       Known+occ         +12% +-7     +2%   0.2    17.5      4.7 / 2.0       -
+Evader  Choke  Line mirror + hold, auto=threat Bad       Anonymous          +0% +-7     -5%   0.0    16.1     17.5 / 3.5     0.0
+Evader  Choke  Cut-off + hold, locked #0       Perfect   -                  +5% +--     -4%   0.0    23.9      0.0 / 0.0       -
+Evader  Choke  Cut-off + hold, locked #0       Realistic Known-ID          +26% +-3     +7%   0.0    17.1      2.0 / 0.4       -
+Evader  Choke  Cut-off + hold, locked #0       Realistic Known+occ         +21% +-4     +2%   0.2    13.2      2.6 / 0.6       -
+Evader  Choke  Cut-off + hold, locked #0       Realistic Anonymous          +9% +-3     -2%   0.2    11.6      4.5 / 1.2    10.1
+Evader  Choke  Cut-off + hold, locked #0       Bad       Known-ID           +8% +-2     +1%   0.0    11.9      3.0 / 1.2       -
+Evader  Choke  Cut-off + hold, locked #0       Bad       Known+occ          +7% +-6     -2%   0.0    12.5      3.2 / 1.6       -
+Evader  Choke  Cut-off + hold, locked #0       Bad       Anonymous          -1% +-4     -5%   0.0    10.3      9.1 / 2.7     6.1
+
+=== Anonymous tracking, tracking quality (same runs) ===
+Scored without ids (CLEAR-MOT): a reported track within 1.5 m of a robot is on it. False/m, Partn/m = track-seconds per minute on no robot / on a partner (fresh tracks only).
+Opps    Field  Setup                           Sensor    Tracking   RMSE IDsw/min     False/m  Cover    Partn/m
+Cycler  Open   Line mirror + hold, auto=threat Perfect   -          0.00      0.0   0.0 (0.0)   100%  0.0 (0.0)
+Cycler  Open   Line mirror + hold, auto=threat Realistic Known-ID   0.41      2.7   7.9 (0.0)    72%  0.2 (0.0)
+Cycler  Open   Line mirror + hold, auto=threat Realistic Known+occ  0.43      3.1   7.7 (0.0)    66%  0.5 (0.1)
+Cycler  Open   Line mirror + hold, auto=threat Realistic Anonymous  0.48     33.5  14.2 (2.0)    59%  1.5 (0.7)
+Cycler  Open   Line mirror + hold, auto=threat Bad       Known-ID   0.74     12.7  10.3 (0.3)    36%  1.5 (0.3)
+Cycler  Open   Line mirror + hold, auto=threat Bad       Known+occ  0.75     10.6  11.8 (0.3)    34%  1.6 (0.2)
+Cycler  Open   Line mirror + hold, auto=threat Bad       Anonymous  0.82     26.7  26.9 (5.4)    16%  4.4 (1.9)
+Cycler  Open   Cut-off + hold, locked #0       Perfect   -          0.00      0.0   0.0 (0.0)   100%  0.0 (0.0)
+Cycler  Open   Cut-off + hold, locked #0       Realistic Known-ID   0.44      5.5   9.0 (0.0)    70%  0.2 (0.0)
+Cycler  Open   Cut-off + hold, locked #0       Realistic Known+occ  0.47      6.4   8.9 (0.0)    65%  0.3 (0.0)
+Cycler  Open   Cut-off + hold, locked #0       Realistic Anonymous  0.49     36.1  15.1 (1.6)    60%  1.3 (0.7)
+Cycler  Open   Cut-off + hold, locked #0       Bad       Known-ID   0.75     12.2   9.8 (0.3)    36%  1.4 (0.3)
+Cycler  Open   Cut-off + hold, locked #0       Bad       Known+occ  0.77     11.9  10.4 (0.4)    31%  1.4 (0.3)
+Cycler  Open   Cut-off + hold, locked #0       Bad       Anonymous  0.80     32.8  28.4 (5.6)    20%  4.6 (2.0)
+Cycler  Choke  Line mirror + hold, auto=threat Perfect   -          0.00      0.0   0.0 (0.0)   100%  0.0 (0.0)
+Cycler  Choke  Line mirror + hold, auto=threat Realistic Known-ID   0.40      3.5   4.7 (0.0)    74%  1.0 (0.1)
+Cycler  Choke  Line mirror + hold, auto=threat Realistic Known+occ  0.45      4.7   5.9 (0.0)    64%  1.1 (0.1)
+Cycler  Choke  Line mirror + hold, auto=threat Realistic Anonymous  0.52     35.5  11.4 (1.6)    55%  3.1 (1.7)
+Cycler  Choke  Line mirror + hold, auto=threat Bad       Known-ID   0.71     13.1   8.6 (0.2)    42%  3.5 (0.9)
+Cycler  Choke  Line mirror + hold, auto=threat Bad       Known+occ  0.75     14.7   8.9 (0.2)    34%  3.3 (0.7)
+Cycler  Choke  Line mirror + hold, auto=threat Bad       Anonymous  0.79     27.7  22.8 (4.3)    17%  5.6 (2.8)
+Cycler  Choke  Cut-off + hold, locked #0       Perfect   -          0.00      0.0   0.0 (0.0)   100%  0.0 (0.0)
+Cycler  Choke  Cut-off + hold, locked #0       Realistic Known-ID   0.42      5.2   5.8 (0.0)    74%  0.9 (0.2)
+Cycler  Choke  Cut-off + hold, locked #0       Realistic Known+occ  0.46      5.3   6.6 (0.0)    65%  1.3 (0.2)
+Cycler  Choke  Cut-off + hold, locked #0       Realistic Anonymous  0.53     36.7  12.9 (1.7)    56%  4.3 (2.8)
+Cycler  Choke  Cut-off + hold, locked #0       Bad       Known-ID   0.73     14.1   8.8 (0.3)    41%  3.7 (1.1)
+Cycler  Choke  Cut-off + hold, locked #0       Bad       Known+occ  0.76     14.5   8.6 (0.3)    33%  3.1 (0.6)
+Cycler  Choke  Cut-off + hold, locked #0       Bad       Anonymous  0.82     27.3  20.7 (3.7)    17%  5.4 (2.8)
+Evader  Open   Line mirror + hold, auto=threat Perfect   -          0.00      0.0   0.0 (0.0)   100%  0.0 (0.0)
+Evader  Open   Line mirror + hold, auto=threat Realistic Known-ID   0.45      2.5   8.9 (0.0)    65%  0.7 (0.1)
+Evader  Open   Line mirror + hold, auto=threat Realistic Known+occ  0.46      1.9   8.9 (0.0)    60%  0.7 (0.1)
+Evader  Open   Line mirror + hold, auto=threat Realistic Anonymous  0.49     31.5  13.5 (1.4)    55%  1.7 (0.7)
+Evader  Open   Line mirror + hold, auto=threat Bad       Known-ID   0.81      9.2  14.1 (0.3)    30%  1.9 (0.5)
+Evader  Open   Line mirror + hold, auto=threat Bad       Known+occ  0.81      9.3  13.5 (0.4)    28%  2.0 (0.3)
+Evader  Open   Line mirror + hold, auto=threat Bad       Anonymous  0.84     24.9  28.4 (5.4)    14%  4.2 (1.9)
+Evader  Open   Cut-off + hold, locked #0       Perfect   -          0.00      0.0   0.0 (0.0)   100%  0.0 (0.0)
+Evader  Open   Cut-off + hold, locked #0       Realistic Known-ID   0.46      4.7  10.4 (0.0)    55%  0.6 (0.0)
+Evader  Open   Cut-off + hold, locked #0       Realistic Known+occ  0.48      3.7  10.2 (0.0)    54%  1.0 (0.0)
+Evader  Open   Cut-off + hold, locked #0       Realistic Anonymous  0.49     29.3  13.7 (1.2)    53%  1.7 (0.9)
+Evader  Open   Cut-off + hold, locked #0       Bad       Known-ID   0.80      8.9  11.6 (0.3)    27%  1.5 (0.2)
+Evader  Open   Cut-off + hold, locked #0       Bad       Known+occ  0.81      7.5  11.3 (0.3)    25%  1.7 (0.4)
+Evader  Open   Cut-off + hold, locked #0       Bad       Anonymous  0.84     33.0  27.8 (5.5)    17%  6.5 (3.3)
+Evader  Choke  Line mirror + hold, auto=threat Perfect   -          0.01      0.0   0.0 (0.0)   100%  0.0 (0.0)
+Evader  Choke  Line mirror + hold, auto=threat Realistic Known-ID   0.41      4.1   5.8 (0.0)    73%  1.4 (0.2)
+Evader  Choke  Line mirror + hold, auto=threat Realistic Known+occ  0.46      4.0   7.1 (0.0)    64%  1.3 (0.1)
+Evader  Choke  Line mirror + hold, auto=threat Realistic Anonymous  0.53     37.5  15.2 (2.0)    56%  4.4 (2.4)
+Evader  Choke  Line mirror + hold, auto=threat Bad       Known-ID   0.77     15.2  10.4 (0.3)    38%  4.2 (1.1)
+Evader  Choke  Line mirror + hold, auto=threat Bad       Known+occ  0.76     12.9   8.9 (0.2)    33%  3.2 (0.5)
+Evader  Choke  Line mirror + hold, auto=threat Bad       Anonymous  0.84     26.1  25.0 (4.7)    15%  5.3 (2.3)
+Evader  Choke  Cut-off + hold, locked #0       Perfect   -          0.00      0.0   0.0 (0.0)   100%  0.0 (0.0)
+Evader  Choke  Cut-off + hold, locked #0       Realistic Known-ID   0.41      4.3   6.7 (0.1)    73%  1.8 (0.3)
+Evader  Choke  Cut-off + hold, locked #0       Realistic Known+occ  0.49      5.5   8.2 (0.0)    64%  2.1 (0.4)
+Evader  Choke  Cut-off + hold, locked #0       Realistic Anonymous  0.54     38.5  15.7 (1.7)    56%  5.2 (2.8)
+Evader  Choke  Cut-off + hold, locked #0       Bad       Known-ID   0.74     14.9   9.2 (0.3)    42%  3.9 (1.0)
+Evader  Choke  Cut-off + hold, locked #0       Bad       Known+occ  0.76     14.1   9.3 (0.2)    33%  4.1 (0.8)
+Evader  Choke  Cut-off + hold, locked #0       Bad       Anonymous  0.83     34.8  25.6 (4.7)    19%  8.0 (4.1)
+
+=== Re-acquisition (id handoff by proximity + elimination), anonymous tracking: on vs off (same seeds) ===
+Opps    Field  Setup                           Sensor       Slowed on/off  Pins on/off  IDsw/min on/off Repnt/m on/off Cover on/off  Handoff/m
+Cycler  Open   Line mirror + hold, auto=threat Realistic       +11% / +9%    0.0 / 0.0      33.5 / 61.1              -    59% / 57%       42.7
+Cycler  Open   Line mirror + hold, auto=threat Bad              +8% / +7%    0.0 / 0.0      26.7 / 38.2              -    16% / 16%       23.3
+Cycler  Open   Cut-off + hold, locked #0       Realistic      +14% / +12%    0.0 / 0.0      36.1 / 72.6    10.5 / 18.9    60% / 60%       49.3
+Cycler  Open   Cut-off + hold, locked #0       Bad              +6% / +4%    0.2 / 0.0      32.8 / 48.0      5.1 / 5.9    20% / 21%       25.6
+Cycler  Choke  Line mirror + hold, auto=threat Realistic      +13% / +13%    0.2 / 0.0      35.5 / 62.1              -    55% / 54%       49.1
+Cycler  Choke  Line mirror + hold, auto=threat Bad             +10% / +9%    0.4 / 0.0      27.7 / 41.1              -    17% / 17%       25.8
+Cycler  Choke  Cut-off + hold, locked #0       Realistic      +18% / +11%    0.2 / 0.0      36.7 / 74.1     9.7 / 18.9    56% / 57%       51.3
+Cycler  Choke  Cut-off + hold, locked #0       Bad            +25% / +23%    0.4 / 0.2      27.3 / 44.2      4.5 / 7.5    17% / 20%       25.9
+Evader  Open   Line mirror + hold, auto=threat Realistic       +10% / +9%    0.0 / 0.0      31.5 / 62.3              -    55% / 54%       47.1
+Evader  Open   Line mirror + hold, auto=threat Bad              +8% / +7%    0.0 / 0.0      24.9 / 41.5              -    14% / 16%       21.5
+Evader  Open   Cut-off + hold, locked #0       Realistic      +18% / +19%    0.0 / 0.0      29.3 / 68.3     8.7 / 20.9    53% / 54%       44.4
+Evader  Open   Cut-off + hold, locked #0       Bad              +6% / +5%    0.0 / 0.0      33.0 / 47.3      4.8 / 6.1    17% / 18%       27.1
+Evader  Choke  Line mirror + hold, auto=threat Realistic        -4% / -2%    0.2 / 0.2      37.5 / 74.1              -    56% / 56%       56.5
+Evader  Choke  Line mirror + hold, auto=threat Bad              -5% / -6%    0.0 / 0.0      26.1 / 41.9              -    15% / 17%       20.7
+Evader  Choke  Cut-off + hold, locked #0       Realistic        +9% / +2%    0.2 / 0.0      38.5 / 83.9    10.1 / 20.2    56% / 58%       59.0
+Evader  Choke  Cut-off + hold, locked #0       Bad              -1% / +6%    0.0 / 0.2      34.8 / 53.1      6.1 / 8.3    19% / 22%       27.0
+(Slowed is the guarded opponent for 'locked #0' rows, all opponents for 'auto' rows.)

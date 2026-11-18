@@ -37,6 +37,13 @@ code. Keep changes small, tested and explained.
   `./gradlew pinMarginStudy --args="..."`, `./gradlew run --args="..."`), or run with
   `--no-daemon`.
 
+- **Merge decisions about behavior changes need at least 5 seeds.** Compare before and after on
+  the same seeds (paired), and call a change better or worse only if the difference is larger
+  than the seed spread. Perfect-tracking runs are deterministic: say so when you quote them, and
+  use seeded runs (`--batch-anon`, `PinMarginStudy seed=`) for the decision.
+- **Report total contact as well as peak contact.** A change can keep the peak per episode under
+  the bar while the total time in contact goes up.
+
 ## Before every commit
 
 1. `./gradlew test` passes.
@@ -65,15 +72,22 @@ directions, yield when nothing is safe then slide out after 1 s; `PinMarginStudy
 driver's sticks rotated on mirrored fields, Shadow/Interpose no longer lead an opponent away
 from the goal, rotation overrides the blend, clampInside and hold targets legal near walls,
 seeded randomized invariant tests (core InvariantTest, robot MirrorAndDriverInvariantTest).
+Nov 18 follow-ups (docs/findings/audit-followups.md): two Cyclers stalled head-on in a gap (net
+displacement < 0.3 m in 1 s) -> the lower id backs out (M5); hold pushes only opponents closing on
+us or the goal, hysteresis in `HoldLatch` (U1, kept after 10 paired seeds); robot tracking test
+back to full scope with two bars; `PinMarginStudy seed=` / `ghosts=`; batch CSV has
+peak_ref_contact_s and hold_switches_per_min.
 
 Key findings: Line mirror + hold is the safe default and is best or tied everywhere with a real
 (anonymous) camera; Cut-off + hold no longer wins anywhere with a camera; a realistic camera costs
 about half the effect and anonymity mostly costs man-to-man (driver re-points ~7.4/min). Open
-problems: pins are not zero (0.03-0.09 per 3 min with anonymous tracking + contact sensing, from
+problems: pins are not zero (0.07-0.09 per 3 min with anonymous tracking + contact sensing, from
 camera error near contact); every contact threshold, camera number and the command latency are
 placeholders; with 3 ghosts the back-off still lets contact reach ~5 s against Cyclers (and 11 s
-in one Evader run stuck at the geofence, which the core does not know about), while 1 ghost stays
-under 2.5 s everywhere and the referee count is 0 (docs/findings/backoff-redesign.md).
+in one Evader run stuck at the geofence, which the core does not know about); 1 ghost stays under
+2.5 s from the fixed start but not from every start (12 of 240 seeded runs over 2.5 s, up to
+3.52 s); the referee count is 0 (docs/findings/backoff-redesign.md, audit-followups.md).
+Perfect-tracking rows are single deterministic runs that move by ~±10 points with any change.
 Remaining items need the real robot (Phase 7 test session, contact calibration, latency and camera
 measurements, Phase 8 vision) or the 2027 game (FieldConfig, PinRules).
 

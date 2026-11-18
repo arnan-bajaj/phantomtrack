@@ -1,0 +1,40 @@
+configs 24 seeds 10
+== Pooled over the 24 one-ghost setups: per-seed mean, then over seeds ==
+slowed    before   11.208 (seed sd 0.000) after   11.208 diff +0.000 +- 0.000 SE
+touch     before   28.424 (seed sd 0.087) after   28.442 diff +0.017 +- 0.006 SE
+peak      before    1.332 (seed sd 0.026) after    1.336 diff +0.004 +- 0.003 SE
+refpk     before    0.913 (seed sd 0.016) after    0.887 diff -0.027 +- 0.003 SE
+refpins   before    0.000 (seed sd 0.000) after    0.000 diff +0.000 +- 0.000 SE
+holdsw    before    9.263 (seed sd 0.060) after   10.127 diff +0.863 +- 0.006 SE
+backoffs  before   21.267 (seed sd 0.102) after   20.679 diff -0.588 +- 0.004 SE
+max peak any-touch before/after: 3.52 3.52
+max peak referee before/after: 1.84 1.84
+total ref pins before/after: 0 0
+gridlocked before/after: 0 0
+
+== Per setup (10 seeds): slowed diff mean +- SE, flagged if beyond 2 SE ==
+0.5 m/s   0 ms Cycler 1 CO+hold slowed  +0.0-> +0.0 diff  +0.0+-0.0 touch   -0.1s peak 0.90->0.90 refPk 0.30->0.24 holdSw/m   2.8->  5.6 
+0.5 m/s   0 ms Cycler 1 LM+hold slowed  +0.0-> +0.0 diff  +0.0+-0.0 touch   +0.0s peak 1.92->1.92 refPk 0.32->0.32 holdSw/m   2.8->  2.8 
+0.5 m/s   0 ms Evader 1 CO+hold slowed +17.0->+17.0 diff  +0.0+-0.0 touch   +0.0s peak 0.48->0.48 refPk 0.32->0.32 holdSw/m   2.4->  2.4 
+0.5 m/s   0 ms Evader 1 LM+hold slowed  +0.0-> +0.0 diff  +0.0+-0.0 touch   +0.0s peak 0.40->0.40 refPk 0.32->0.32 holdSw/m   2.8->  2.8 
+0.5 m/s 100 ms Cycler 1 CO+hold slowed  +0.0-> +0.0 diff  +0.0+-0.0 touch   -0.0s peak 1.20->1.20 refPk 0.28->0.28 holdSw/m   2.8->  3.0 
+0.5 m/s 100 ms Cycler 1 LM+hold slowed  +0.0-> +0.0 diff  +0.0+-0.0 touch   +0.0s peak 0.36->0.36 refPk 0.32->0.24 holdSw/m   2.8->  5.6 
+0.5 m/s 100 ms Evader 1 CO+hold slowed +17.0->+17.0 diff  +0.0+-0.0 touch   +0.0s peak 0.44->0.42 refPk 0.32->0.32 holdSw/m   2.5->  4.7 
+0.5 m/s 100 ms Evader 1 LM+hold slowed  +0.0-> +0.0 diff  +0.0+-0.0 touch   -0.2s peak 0.38->0.38 refPk 0.32->0.26 holdSw/m   2.8->  5.6 
+1.0 m/s   0 ms Cycler 1 CO+hold slowed  +8.0-> +8.0 diff  +0.0+-0.0 touch   +0.0s peak 2.38->2.38 refPk 1.18->1.18 holdSw/m   4.8->  4.8 
+1.0 m/s   0 ms Cycler 1 LM+hold slowed  +8.0-> +8.0 diff  +0.0+-0.0 touch   +0.0s peak 1.54->1.54 refPk 1.18->1.18 holdSw/m   5.2->  5.2 
+1.0 m/s   0 ms Evader 1 CO+hold slowed  +8.0-> +8.0 diff  +0.0+-0.0 touch   +0.0s peak 1.36->1.36 refPk 1.16->1.16 holdSw/m   4.9->  4.9 
+1.0 m/s   0 ms Evader 1 LM+hold slowed  +8.0-> +8.0 diff  +0.0+-0.0 touch   +0.0s peak 1.42->1.42 refPk 1.18->1.18 holdSw/m   9.6->  9.6 
+1.0 m/s 100 ms Cycler 1 CO+hold slowed  +8.0-> +8.0 diff  +0.0+-0.0 touch   -0.0s peak 3.52->3.52 refPk 1.16->1.16 holdSw/m   4.8->  4.9 
+1.0 m/s 100 ms Cycler 1 LM+hold slowed  +8.0-> +8.0 diff  +0.0+-0.0 touch   +0.7s peak 1.68->1.80 refPk 1.18->1.04 holdSw/m   5.0-> 10.2 
+1.0 m/s 100 ms Evader 1 CO+hold slowed  +8.0-> +8.0 diff  +0.0+-0.0 touch   +0.0s peak 1.40->1.40 refPk 1.14->1.14 holdSw/m   5.1->  5.1 
+1.0 m/s 100 ms Evader 1 LM+hold slowed  +8.0-> +8.0 diff  +0.0+-0.0 touch   +0.0s peak 1.50->1.50 refPk 1.16->0.98 holdSw/m   9.6-> 14.4 
+4.5 m/s   0 ms Cycler 1 CO+hold slowed +13.0->+13.0 diff  +0.0+-0.0 touch   -0.0s peak 2.10->2.10 refPk 1.84->1.84 holdSw/m  15.4-> 15.4 
+4.5 m/s   0 ms Cycler 1 LM+hold slowed +26.0->+26.0 diff  +0.0+-0.0 touch   +0.0s peak 3.00->3.00 refPk 1.84->1.84 holdSw/m  13.7-> 13.7 
+4.5 m/s   0 ms Evader 1 CO+hold slowed  +8.0-> +8.0 diff  +0.0+-0.0 touch   +0.1s peak 0.94->0.86 refPk 0.94->0.68 holdSw/m  31.6-> 31.6 
+4.5 m/s   0 ms Evader 1 LM+hold slowed +34.0->+34.0 diff  +0.0+-0.0 touch   +0.0s peak 1.62->1.62 refPk 0.90->0.90 holdSw/m  13.3-> 13.3 
+4.5 m/s 100 ms Cycler 1 CO+hold slowed +16.0->+16.0 diff  +0.0+-0.0 touch   -0.0s peak 2.16->2.12 refPk 1.84->1.76 holdSw/m  15.0-> 15.0 
+4.5 m/s 100 ms Cycler 1 LM+hold slowed +34.0->+34.0 diff  +0.0+-0.0 touch   +0.0s peak 3.04->3.04 refPk 1.84->1.84 holdSw/m  13.1-> 13.1 
+4.5 m/s 100 ms Evader 1 CO+hold slowed +10.0->+10.0 diff  +0.0+-0.0 touch   -0.0s peak 1.08->1.08 refPk 0.82->0.82 holdSw/m  23.3-> 23.3 
+4.5 m/s 100 ms Evader 1 LM+hold slowed +30.0->+30.0 diff  +0.0+-0.0 touch   +0.0s peak 1.46->1.46 refPk 1.44->1.44 holdSw/m  26.2-> 26.1 
+setups worse: 0 better: 0
