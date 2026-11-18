@@ -17,6 +17,7 @@ import phantom.core.modes.LineMirrorMode;
 import phantom.core.modes.ShadowMode;
 import phantom.core.modes.ZoneMode;
 import phantom.core.geometry.Vec2;
+import phantom.core.rules.ContactDetector;
 import phantom.core.tracking.Hungarian;
 import phantom.core.tracking.KalmanOpponentTracker;
 import phantom.core.tracking.MultiTargetTracker;
@@ -33,18 +34,25 @@ public final class SimSession {
   /** How the defense code learns where opponents are. */
   public enum Sensor {
     /** Exact ground truth, no delay. */
-    PERFECT(null, null),
+    PERFECT(null, null, 0.05),
     /** Simulated camera + Kalman filter, plausible numbers. */
-    REALISTIC(NoisySensor.Config.realistic(), AnonymousSensor.Config.realistic()),
+    REALISTIC(NoisySensor.Config.realistic(), AnonymousSensor.Config.realistic(), 0.4),
     /** Simulated camera + Kalman filter, struggling pipeline. */
-    BAD(NoisySensor.Config.bad(), AnonymousSensor.Config.bad());
+    BAD(NoisySensor.Config.bad(), AnonymousSensor.Config.bad(), 0.4);
 
     final NoisySensor.Config config;
     final AnonymousSensor.Config anonymous;
+    /**
+     * Typical tracking error (m), used to size the contact detector's vision ramp. Realistic is
+     * the measured 0.4 m; Bad (0.9 m measured) is capped at 0.4 m because a wider ramp would call
+     * contact at almost 1 m apart. Perfect gets 0.05 m.
+     */
+    final double trackingErrorM;
 
-    Sensor(NoisySensor.Config config, AnonymousSensor.Config anonymous) {
+    Sensor(NoisySensor.Config config, AnonymousSensor.Config anonymous, double trackingErrorM) {
       this.config = config;
       this.anonymous = anonymous;
+      this.trackingErrorM = trackingErrorM;
     }
 
     public String label() {
@@ -116,6 +124,7 @@ public final class SimSession {
   private final MultiTargetTracker multiTracker; // null unless anonymous
   private final AnonymousSensor anonymousSensor; // null unless anonymous
   private final DefenseAssist assist;
+  private final DriveTelemetrySim driveTelemetry;
   private final Metrics metrics = new Metrics();
   private ChassisCommand lastCommand = ChassisCommand.STOP;
 
@@ -150,7 +159,7 @@ public final class SimSession {
    */
   public SimSession(SimWorld world, Sensor sensor, long seed, Tracking tracking,
       UnaryOperator<MultiTargetTracker.Config> tuning) {
-    this(world, sensor, sensor.config == null ? Tracking.KNOWN_ID : tracking,
+    this(world, sensor, seed, sensor.config == null ? Tracking.KNOWN_ID : tracking,
         Pipeline.build(world, sensor, seed, sensor.config == null ? Tracking.KNOWN_ID : tracking,
             tuning));
   }
@@ -162,7 +171,7 @@ public final class SimSession {
    * @param tracking ANONYMOUS makes the metrics and the simulated driver ignore track ids
    */
   SimSession(SimWorld world, Sensor sensor, Tracking tracking, OpponentTracker tracker) {
-    this(world, sensor, tracking, new Pipeline(tracker, null, null));
+    this(world, sensor, 1L, tracking, new Pipeline(tracker, null, null));
   }
 
   /**
@@ -179,19 +188,29 @@ public final class SimSession {
       MultiTargetTracker mtt = new MultiTargetTracker(cam, tuning.apply(
           MultiTargetTracker.Config.defaults(camera.camera().noiseStd(), camera.colorErrorRate())
               .withFirstTrackId(FIRST_TRACK_ID)));
-      return new SimSession(world, label, tracking, new Pipeline(mtt, mtt, cam));
+      return new SimSession(world, label, seed, tracking, new Pipeline(mtt, mtt, cam));
     }
-    return new SimSession(world, label, Tracking.KNOWN_ID, new Pipeline(
+    return new SimSession(world, label, seed, Tracking.KNOWN_ID, new Pipeline(
         KalmanOpponentTracker.defaults(new NoisySensor(world, camera.camera(), seed),
             camera.camera().noiseStd()), null, null));
   }
 
-  private SimSession(SimWorld world, Sensor sensor, Tracking tracking, Pipeline pipeline) {
+  private SimSession(
+      SimWorld world, Sensor sensor, long seed, Tracking tracking, Pipeline pipeline) {
     this.world = world;
     this.sensor = sensor;
     this.tracking = tracking;
     this.multiTracker = pipeline.multiTracker();
     this.anonymousSensor = pipeline.anonymousSensor();
+    // Drive sensors for contact detection: noisy whenever the camera is, on their own seed.
+    this.driveTelemetry =
+        new DriveTelemetrySim(
+            world.self(),
+            DriveMotorModel.krakenX60(),
+            sensor.config == null
+                ? DriveTelemetrySim.Config.noiseless()
+                : DriveTelemetrySim.Config.realistic(),
+            31L * seed + 7L);
     this.assist =
         new DefenseAssist(
             List.of(
@@ -204,6 +223,9 @@ public final class SimSession {
             DriverBlend.defaults(),
             pipeline.tracker(),
             world.field());
+    // The detector's vision ramp is a per-camera calibration: as wide as the tracking error.
+    this.assist.setContactDetectorConfig(
+        ContactDetector.Config.placeholder().withVisionError(sensor.trackingErrorM));
   }
 
   /** Camera + tracker for one session. */
@@ -316,6 +338,7 @@ public final class SimSession {
   public void step(ChassisCommand driver, boolean assistEngaged) {
     simulatedDriver();
     RobotBody self = world.self();
+    assist.setDriveTelemetry(driveTelemetry.sample(world.timeSec()));
     ChassisCommand cmd =
         assist.update(world.timeSec(), self.pose(), self.velocity(), driver, assistEngaged);
     lastCommand = cmd;
@@ -368,6 +391,11 @@ public final class SimSession {
 
   public SimWorld world() {
     return world;
+  }
+
+  /** The simulated drive sensors feeding the contact detector. */
+  public DriveTelemetrySim driveTelemetry() {
+    return driveTelemetry;
   }
 
   public DefenseAssist assist() {
@@ -502,12 +530,19 @@ public final class SimSession {
     private int opponentSamples = 0;
     private int lastGuardedId = -1;
     private int targetSwitches = 0;
+    private double falsePositiveSeconds = 0.0;
+    private double missedSeconds = 0.0;
+    private double pressingSeconds = 0.0;
+    private boolean previousNear = false;
+    private boolean previousPressing = false;
+    private boolean havePreviousTruth = false;
 
     void record(SimSession s) {
       recordIdentityFree(s);
       if (s.tracking != Tracking.ANONYMOUS) {
         recordEstimates(s); // needs real ids
       }
+      recordContactSensing(s);
       DefenseAssist.State st = s.assist.lastState();
       if (st != DefenseAssist.State.ENGAGED && st != DefenseAssist.State.BACKING_OFF) {
         return;
@@ -685,6 +720,53 @@ public final class SimSession {
     /** Simulated seconds scored so far. */
     public double seconds() {
       return steps * DT;
+    }
+
+    /**
+     * Scores the pin guard's contact sensing against ground truth. The guard decides at the start
+     * of a step from sensor data describing the end of the previous step, so it is compared with
+     * the truth recorded at the end of the previous step.
+     *
+     * <pre>
+     *   false positive: guard counting contact while truly no opponent is within 0.05 m
+     *   missed:         guard NOT counting contact while we truly press an opponent
+     *                   (within 0.05 m and driving into it, what the referee counts)
+     * </pre>
+     */
+    private void recordContactSensing(SimSession s) {
+      if (!s.assist.rulesGuardEnabled()) {
+        return;
+      }
+      boolean sensed = s.assist.guardSensesContact();
+      if (havePreviousTruth) {
+        if (sensed && !previousNear) {
+          falsePositiveSeconds += DT;
+        }
+        if (previousPressing) {
+          pressingSeconds += DT;
+          if (!sensed) {
+            missedSeconds += DT;
+          }
+        }
+      }
+      previousNear = !s.world.selfNearContactNow().isEmpty();
+      previousPressing = !s.world.selfPressingNow().isEmpty();
+      havePreviousTruth = true;
+    }
+
+    /** Seconds the guard counted contact while no opponent was touching us. */
+    public double falsePositiveSeconds() {
+      return falsePositiveSeconds;
+    }
+
+    /** Seconds we truly pressed an opponent while the guard did not count contact. */
+    public double missedSeconds() {
+      return missedSeconds;
+    }
+
+    /** Seconds we truly pressed an opponent (referee's definition). */
+    public double pressingSeconds() {
+      return pressingSeconds;
     }
 
     /** How wrong the robot's belief is: |estimated position now - true position|, per track. */

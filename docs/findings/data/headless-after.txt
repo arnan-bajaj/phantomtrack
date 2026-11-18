@@ -1,0 +1,88 @@
+=== 180 s, 3 Cycler (push through) opponents (guarding #0) ===
+Setup                               Guarded cyc   Slowed    Total   Contact   Pins  Back-offs
+No defense                               7.15 s        -       76     0.0 s      0          0
+Shadow                                   7.52 s      +5%       76    19.1 s      0         22
+Shadow + hold                            8.50 s     +19%       73    49.1 s      0         22
+Interpose                                7.09 s      -1%       77     4.4 s      0          0
+Interpose + hold                         7.16 s      +0%       78    13.3 s      0         19
+Zone                                     7.36 s      +3%       74    35.3 s      0          0
+Zone + hold                              7.40 s      +4%       72    59.3 s      0         11
+Line mirror                              9.73 s     +36%       70    56.8 s      0         20
+Line mirror + hold                       9.48 s     +33%       72    54.7 s      0         19
+Cut-off                                  9.60 s     +34%       71    64.8 s      0         25
+Cut-off + hold                          10.42 s     +46%       69    63.3 s      0         22
+Shadow + hold, NO pin guard              9.15 s     +28%       72    79.9 s      9          0
+Interpose + hold, NO pin guard           9.33 s     +31%       62   127.8 s      5          0
+Zone + hold, NO pin guard                7.45 s      +4%       72    77.5 s      5          0
+Line mirror + hold, NO pin guard        10.76 s     +50%       70    69.8 s     17          0
+Cut-off + hold, NO pin guard            11.79 s     +65%       66    94.1 s     16          0
+Snapshots: snapshots/cycler-*.png
+
+=== 180 s, 3 Evader (dodge defenders) opponents (guarding #0) ===
+Setup                               Guarded cyc   Slowed    Total   Contact   Pins  Back-offs
+No defense                               7.15 s        -       78     0.0 s      0          0
+Shadow                                   8.59 s     +20%       69    14.3 s      0         12
+Shadow + hold                            9.40 s     +31%       71    47.0 s      0         23
+Interpose                                7.17 s      +0%       76     0.4 s      0          0
+Interpose + hold                         7.66 s      +7%       76    22.1 s      0         16
+Zone                                     7.49 s      +5%       73     8.6 s      0          0
+Zone + hold                              7.26 s      +1%       75    39.0 s      0          0
+Line mirror                              9.78 s     +37%       69    45.2 s      0         21
+Line mirror + hold                      10.01 s     +40%       69    44.0 s      0         20
+Cut-off                                  7.72 s      +8%       72    11.0 s      0          0
+Cut-off + hold                           7.98 s     +12%       74    23.5 s      0          1
+Shadow + hold, NO pin guard              jammed        -       55   173.6 s      1          0
+Interpose + hold, NO pin guard           7.80 s      +9%       63   116.3 s      4          0
+Zone + hold, NO pin guard                7.26 s      +1%       75    39.0 s      0          0
+Line mirror + hold, NO pin guard        10.77 s     +50%       68    61.4 s      4          0
+Cut-off + hold, NO pin guard             8.52 s     +19%       74    31.7 s      1          0
+Snapshots: snapshots/evader-*.png
+
+=== Tracking quality: 180 s, guarding #0, noisy rows averaged over 5 seeds ===
+Opponents  Setup                  Sensor       Slowed   Pins   Est. err  Coverage
+Cycler     Shadow + hold          Perfect        +19%      0          0      100%
+Cycler     Shadow + hold          Realistic      +14%    0.2     0.41 m       53%
+Cycler     Shadow + hold          Bad            +12%    0.0     0.89 m       36%
+Cycler     Line mirror + hold     Perfect        +33%      0          0      100%
+Cycler     Line mirror + hold     Realistic      +27%    0.0     0.37 m       71%
+Cycler     Line mirror + hold     Bad            +11%    0.0     0.97 m       44%
+Evader     Shadow + hold          Perfect        +31%      0          0      100%
+Evader     Shadow + hold          Realistic      +17%    0.0     0.46 m       50%
+Evader     Shadow + hold          Bad            +10%    0.0     0.96 m       32%
+Evader     Line mirror + hold     Perfect        +40%      0          0      100%
+Evader     Line mirror + hold     Realistic      +18%    0.0     0.44 m       72%
+Evader     Line mirror + hold     Bad            +11%    0.0     1.09 m       39%
+
+=== Auto focus (no opponent chosen): 180 s, effect on ALL opponents ===
+Opponents  Setup                                 Total cyc   Slowed Changes/min   Pins
+Cycler     No defense                                   76        -          -      0
+Cycler     Shadow + hold, locked on #0                  73      +4%        0.0      0
+Cycler     Shadow + hold, auto=nearest                  73      +4%       18.7      0
+Cycler     Shadow + hold, auto=threat                   72      +6%       24.7      0
+Cycler     Line mirror + hold, locked on #0             72      +6%        0.0      0
+Cycler     Line mirror + hold, auto=nearest             69     +10%       32.3      0
+Cycler     Line mirror + hold, auto=threat              69     +10%       27.3      0
+Evader     No defense                                   78        -          -      0
+Evader     Shadow + hold, locked on #0                  71     +10%        0.7      0
+Evader     Shadow + hold, auto=nearest                  73      +7%       16.0      0
+Evader     Shadow + hold, auto=threat                   73      +7%       21.7      0
+Evader     Line mirror + hold, locked on #0             69     +13%        0.0      0
+Evader     Line mirror + hold, auto=nearest             70     +11%       20.0      0
+Evader     Line mirror + hold, auto=threat              69     +13%       22.0      0
+
+=== Field layouts: 180 s, perfect tracking, guarded opp slowed (all-opp slowed) ===
+Opps     Setup                                            Open               Choke           Two lanes   Pins
+Cycler   Shadow + hold, locked #0                   +19% (+4%)          +16% (+4%)          +17% (+6%)      0
+Cycler   Interpose + hold, locked #0                 +0% (-3%)           +6% (+3%)         +36% (+10%)      0
+Cycler   Zone + hold                                 +4% (+6%)           +9% (+6%)           -0% (+4%)      0
+Cycler   Line mirror + hold, locked #0              +33% (+6%)         +51% (+17%)         +37% (+14%)      0
+Cycler   Line mirror + hold, auto=threat           +11% (+10%)         +17% (+15%)         +11% (+21%)      0
+Cycler   Cut-off + hold, locked #0                 +46% (+10%)         +31% (+15%)         +44% (+12%)      0
+Cycler     baseline cycle time                          7.15 s              7.69 s              7.43 s
+Evader   Shadow + hold, locked #0                  +31% (+10%)         +23% (+10%)          +34% (+7%)      0
+Evader   Interpose + hold, locked #0                 +7% (+3%)           -3% (+2%)         +20% (+13%)      0
+Evader   Zone + hold                                 +1% (+4%)           +2% (+8%)          +13% (+3%)      0
+Evader   Line mirror + hold, locked #0             +40% (+13%)         +43% (+29%)         +70% (+24%)      0
+Evader   Line mirror + hold, auto=threat           +17% (+13%)         +24% (+24%)         +35% (+21%)      0
+Evader   Cut-off + hold, locked #0                  +12% (+5%)         +36% (+26%)         +34% (+13%)      0
+Evader     baseline cycle time                          7.15 s              8.52 s              8.30 s

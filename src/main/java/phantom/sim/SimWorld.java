@@ -33,6 +33,7 @@ public final class SimWorld {
   private double timeSec = 0.0;
   private double selfContactSeconds = 0.0;
   private double selfPartnerContactSeconds = 0.0;
+  private final Set<Integer> touchingNow = new HashSet<>();
 
   // Referee view: counts pins from ground truth (no safety margin).
   private final PinTimer refereePins;
@@ -113,6 +114,7 @@ public final class SimWorld {
       partners.get(i).body().step(partnerCmds.get(i), dt, field);
     }
 
+    touchingNow.clear();
     boolean selfTouching = false;
     boolean selfTouchingPartner = false;
     for (int iter = 0; iter < 3; iter++) {
@@ -125,6 +127,9 @@ public final class SimWorld {
     }
     if (selfTouchingPartner) {
       selfPartnerContactSeconds += dt;
+    }
+    for (RobotBody b : allBodies()) {
+      b.finishStep(dt); // accelerations include what the collisions did
     }
     timeSec += dt;
     recordHistory();
@@ -177,7 +182,13 @@ public final class SimWorld {
           continue;
         }
         if (a == self || b == self) {
-          touched |= isPartner(a == self ? b : a) ? TOUCHED_PARTNER : TOUCHED_OPPONENT;
+          RobotBody other = a == self ? b : a;
+          if (isPartner(other)) {
+            touched |= TOUCHED_PARTNER;
+          } else {
+            touched |= TOUCHED_OPPONENT;
+            touchingNow.add(other.id());
+          }
         }
         Vec2 n = dist < 1e-9 ? new Vec2(1.0, 0.0) : delta.times(1.0 / dist);
         double effortA = Contact.effort(a.desiredVelocity(), n, a.maxSpeed());
@@ -269,6 +280,46 @@ public final class SimWorld {
   /** Pin episodes that reached the limit, counting only time we spent driving into them. */
   public int pinViolations() {
     return pinViolations;
+  }
+
+  /** Ids of the opponents our robot was physically touching during the last step (truth). */
+  public Set<Integer> selfTouchingNow() {
+    return Set.copyOf(touchingNow);
+  }
+
+  /**
+   * Truth for scoring the contact detector: opponents we are touching (gap within the referee's
+   * tolerance) AND driving into (effort above 0.1), exactly the contact the referee counts.
+   */
+  public Set<Integer> selfPressingNow() {
+    Set<Integer> out = new HashSet<>();
+    for (int id : selfNearContactNow()) {
+      Vec2 toward = bodyOf(id).position().minus(self.position()).normalized();
+      if (Contact.effort(self.desiredVelocity(), toward, self.maxSpeed()) > 0.1) {
+        out.add(id);
+      }
+    }
+    return out;
+  }
+
+  /** Opponents within the referee's contact tolerance of us (bumper gap <= 0.05 m), pressing or not. */
+  public Set<Integer> selfNearContactNow() {
+    Set<Integer> out = new HashSet<>();
+    for (Opponent o : opponents) {
+      if (refereePins.gap(self.position(), o.body().position()) <= PinTimer.CONTACT_TOLERANCE) {
+        out.add(o.body().id());
+      }
+    }
+    return out;
+  }
+
+  private RobotBody bodyOf(int id) {
+    for (Opponent o : opponents) {
+      if (o.body().id() == id) {
+        return o.body();
+      }
+    }
+    throw new IllegalArgumentException("no opponent " + id);
   }
 
   /** Total seconds our robot has been in contact with any opponent. */
