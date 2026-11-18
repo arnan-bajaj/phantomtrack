@@ -65,9 +65,12 @@ public record Vec2(double x, double y) {
     return times(maxLength / n);
   }
 
-  /** Angle of this vector in radians, in (-pi, pi]. Returns 0 for the zero vector. */
+  /**
+   * Angle of this vector in radians, in (-pi, pi]. Returns 0 for the zero vector. (atan2 alone
+   * gives -pi for y = -0.0 and x < 0, e.g. (1,0).times(-1); wrap maps that to pi.)
+   */
   public double angle() {
-    return (Math.abs(x) < EPS && Math.abs(y) < EPS) ? 0.0 : Math.atan2(y, x);
+    return (Math.abs(x) < EPS && Math.abs(y) < EPS) ? 0.0 : Angles.wrap(Math.atan2(y, x));
   }
 
   /** Linear interpolation: t=0 gives this, t=1 gives o. */

@@ -54,6 +54,18 @@ class Vec2Test {
   }
 
   @Test
+  void angleStaysInTheHalfOpenRangeForNegativeZero() {
+    // Audit L5. atan2(-0.0, -1) = -pi, outside (-pi, pi]. (1,0).times(-1) = (-1, -0.0) is the
+    // usual way to get there. Expected pi, exactly as for (-1, +0.0).
+    assertEquals(Math.PI, new Vec2(1, 0).times(-1.0).angle(), 0.0);
+    assertEquals(Math.PI, new Vec2(-1, -0.0).angle(), 0.0);
+    assertEquals(Math.PI, new Vec2(-1, 0.0).angle(), 0.0);
+    // nothing else moves: (0,-1) -> -pi/2, (1,-0.0) -> -0.0 == 0
+    assertEquals(-Math.PI / 2, new Vec2(0, -1).angle(), 0.0);
+    assertEquals(0.0, new Vec2(1, -0.0).angle(), 0.0);
+  }
+
+  @Test
   void distanceAndLerp() {
     assertEquals(5.0, new Vec2(1, 1).distanceTo(new Vec2(4, 5)), TOL);
     assertEquals(new Vec2(2, 3), new Vec2(0, 0).lerp(new Vec2(4, 6), 0.5));
