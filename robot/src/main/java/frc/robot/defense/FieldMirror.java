@@ -23,7 +23,7 @@ import phantom.core.geometry.Vec2;
  * </pre>
  *
  * Both maps undo themselves (apply twice = no change), so the same method converts in both
- * directions. L and W must be the size of the field the drivetrain's pose estimator uses. Which
+ * directions. The DRIVER's stick is different: see {@link #driverCommand}. L and W must be the size of the field the drivetrain's pose estimator uses. Which
  * symmetry applies changes from year to year: check the game manual's field drawings.
  *
  * @param fieldLength L, along x (m)
@@ -62,5 +62,28 @@ public record FieldMirror(double fieldLength, double fieldWidth, Symmetry symmet
 
   public ChassisCommand command(ChassisCommand c) {
     return new ChassisCommand(velocity(c.velocity()), omega(c.omega()));
+  }
+
+  /**
+   * A RED driver's stick command in the blue frame. {@link DriverInput} builds the command as if
+   * the driver stood at the blue wall (stick forward = +x). A red driver stands at the red wall,
+   * turned 180 degrees: a person is rotated, never reflected, whatever the field's symmetry. So
+   * their command on the real field is the stick command rotated 180 degrees, and the blue frame
+   * sees that through the field's symmetry:
+   *
+   * <pre>
+   *   real  = (-vx, -vy, omega)                       (rotated 180 degrees)
+   *   blue  = command(real)
+   *     ROTATED:  (vx, vy, omega)                      (the same as the stick)
+   *     MIRRORED: (vx, -vy, -omega)
+   * </pre>
+   *
+   * Using the stick as a blue-frame command directly is right for ROTATED only; on a MIRRORED
+   * field it reverses the red driver's left/right and turning.
+   */
+  public ChassisCommand driverCommand(ChassisCommand stick) {
+    ChassisCommand real =
+        new ChassisCommand(new Vec2(-stick.velocity().x(), -stick.velocity().y()), stick.omega());
+    return command(real);
   }
 }

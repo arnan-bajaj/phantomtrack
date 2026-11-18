@@ -51,7 +51,9 @@ src/main/java/frc/robot/              the thin WPILib layer: drivetrain, control
   and are unit-tested: `./gradlew test` runs 76 tests without a robot or the HAL.
 - Core always works in the **blue frame**. `AllianceFrame` mirrors poses on the way in and
   commands on the way out when the Driver Station says red (`FieldMirror`, both rotated and
-  mirrored fields; set `Constants.MIRROR` from the 2027 manual).
+  mirrored fields; set `Constants.MIRROR` from the 2027 manual). The driver's sticks are the
+  exception: a red driver is turned 180 degrees, never reflected, so `AllianceFrame.driverToBlue`
+  rotates them on either kind of field (`FieldMirror.driverCommand`).
 
 One loop (20 ms), in `DefenseTeleop` (the drivetrain's default command):
 

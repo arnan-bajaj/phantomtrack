@@ -21,7 +21,8 @@ import phantom.core.geometry.Vec2;
  *
  * <pre>
  *   controller + drivetrain (real frame)
- *     -> AllianceFrame.toBlue -> PhantomTrack.update (all safety rules, blue frame)
+ *     -> AllianceFrame.toBlue (pose, velocity), AllianceFrame.driverToBlue (sticks)
+ *     -> PhantomTrack.update (all safety rules, blue frame)
  *     -> AllianceFrame.commandToReal -> drivetrain.driveFieldRelative
  *   then rumble + telemetry
  * </pre>
@@ -88,14 +89,18 @@ public final class DefenseTeleop extends Command {
     double forward = -hid.getLeftY();
     double left = -hid.getLeftX();
     double ccw = -hid.getRightX();
+    // The driver stands at their own wall: on red the stick is rotated 180 degrees, never
+    // mirrored, whatever the field's symmetry (FieldMirror.driverCommand).
     ChassisCommand driver =
-        DriverInput.command(
-            forward,
-            left,
-            ccw,
-            pt.safety().stickDeadband(),
-            settings.driverMaxSpeed(),
-            Constants.DRIVER_MAX_OMEGA);
+        frame.driverToBlue(
+            DriverInput.command(
+                forward,
+                left,
+                ccw,
+                pt.safety().stickDeadband(),
+                settings.driverMaxSpeed(),
+                Constants.DRIVER_MAX_OMEGA),
+            red);
 
     ChassisCommand blueOut =
         pt.update(

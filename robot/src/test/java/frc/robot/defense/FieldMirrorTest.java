@@ -104,6 +104,35 @@ class FieldMirrorTest {
   }
 
   @Test
+  void aRedDriversStickIsRotatedNotReflected() {
+    // Audit H2. A red driver stands at the red wall facing -x, whatever the field's symmetry: their
+    // forward is real -x, their left is real -y, and a CCW twist is real CCW. DriverInput builds the
+    // stick command as if standing at the blue wall: stick forward 0.8 m/s, left 1.0 m/s, CCW
+    // 0.5 rad/s -> (0.8, 1.0), omega 0.5. The robot must get the 180 deg rotation of that:
+    // real (-0.8, -1.0), omega 0.5.
+    ChassisCommand stick = new ChassisCommand(new Vec2(0.8, 1.0), 0.5);
+    for (FieldMirror m : new FieldMirror[] {ROTATED, MIRRORED}) {
+      // DefenseTeleop's path: stick -> blue frame (driverCommand) -> PhantomTrack hands it back
+      // untouched while the driver drives -> real field (command)
+      ChassisCommand real = m.command(m.driverCommand(stick));
+      assertEquals(-0.8, real.velocity().x(), TOL, m.symmetry().toString());
+      assertEquals(-1.0, real.velocity().y(), TOL, m.symmetry().toString());
+      assertEquals(0.5, real.omega(), TOL, m.symmetry().toString());
+    }
+    // In the blue frame (what core and the ghosts see):
+    //   ROTATED:  mirror(rotate(c)) = rotate(rotate(c)) = c            -> (0.8, 1.0), 0.5
+    //   MIRRORED: rotate (-0.8, -1.0, 0.5), then reflect (-vx, vy, -w) -> (0.8, -1.0), -0.5
+    ChassisCommand rotatedBlue = ROTATED.driverCommand(stick);
+    assertEquals(0.8, rotatedBlue.velocity().x(), TOL);
+    assertEquals(1.0, rotatedBlue.velocity().y(), TOL);
+    assertEquals(0.5, rotatedBlue.omega(), TOL);
+    ChassisCommand mirroredBlue = MIRRORED.driverCommand(stick);
+    assertEquals(0.8, mirroredBlue.velocity().x(), TOL);
+    assertEquals(-1.0, mirroredBlue.velocity().y(), TOL);
+    assertEquals(-0.5, mirroredBlue.omega(), TOL);
+  }
+
+  @Test
   void theRedGoalIsTheBlueGoalRotated() {
     // Core defends (13.0, 4.035) in the blue frame. As red, that is (16.54 - 13.0, 8.07 - 4.035)
     // = (3.54, 4.035) on the real field: the other end, which is what we want.

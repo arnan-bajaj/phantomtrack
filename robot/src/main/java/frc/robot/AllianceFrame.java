@@ -37,6 +37,14 @@ public final class AllianceFrame {
     return red ? mirror.velocity(v) : v;
   }
 
+  /**
+   * The driver's stick command (from {@link frc.robot.defense.DriverInput}, as if at the blue
+   * wall) in the blue frame: unchanged on blue, {@link FieldMirror#driverCommand} on red.
+   */
+  public ChassisCommand driverToBlue(ChassisCommand stick, boolean red) {
+    return red ? mirror.driverCommand(stick) : stick;
+  }
+
   public ChassisSpeeds commandToReal(ChassisCommand blue, boolean red) {
     return Convert.toWpi(red ? mirror.command(blue) : blue);
   }

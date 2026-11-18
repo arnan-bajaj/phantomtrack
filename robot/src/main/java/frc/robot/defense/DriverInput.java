@@ -4,8 +4,10 @@ import phantom.core.control.ChassisCommand;
 import phantom.core.geometry.Vec2;
 
 /**
- * Turns raw stick values into the driver's field-relative command, in the blue frame (so "stick
- * forward" is +x; the alliance adapter flips it for red, like normal field-oriented driving).
+ * Turns raw stick values into the driver's field-relative command as seen from the blue wall
+ * (stick forward = +x). On red, {@code AllianceFrame.driverToBlue} turns it into the blue frame
+ * ({@link FieldMirror#driverCommand}: rotated 180 degrees, like normal field-oriented driving, and
+ * never mirrored).
  *
  * <pre>
  *   translation (radial deadband, so diagonals are not squeezed):
