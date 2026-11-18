@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Set;
 import phantom.core.control.ChassisCommand;
 import phantom.core.field.FieldConfig;
+import phantom.core.geometry.Pose;
 import phantom.core.geometry.Vec2;
 import phantom.core.rules.PinRules;
 import phantom.core.rules.PinTimer;
@@ -106,7 +107,11 @@ public final class SimWorld {
       partnerCmds.add(p.behavior().decide(timeSec, dt, p.body(), this));
     }
 
-    self.step(selfCmd, dt, field);
+    if (realSelf != null) {
+      self.setMeasured(realSelf.pose(), realSelf.velocity(), realSelf.desiredVelocity());
+    } else {
+      self.step(selfCmd, dt, field);
+    }
     for (int i = 0; i < opponents.size(); i++) {
       opponents.get(i).body().step(oppCmds.get(i), dt, field);
     }
@@ -134,6 +139,49 @@ public final class SimWorld {
     timeSec += dt;
     recordHistory();
     countPins();
+  }
+
+  // Phase 7: our robot's measured state for the step in progress; null in the normal sim.
+  private record RealSelf(Pose pose, Vec2 velocity, Vec2 desiredVelocity) {}
+
+  private RealSelf realSelf = null;
+
+  /**
+   * Phase 7 (ghost opponents on a real robot): advance the opponents by dt seconds while OUR robot
+   * is real. Its pose and velocity come from the drivetrain, so nothing here may move it.
+   * Everything else (opponent behaviors, opponent-vs-opponent pushing, history, the pin referee)
+   * runs exactly as in {@link #step}.
+   *
+   * <p>Virtual contact with the real robot is one-sided, because a ghost cannot push real metal:
+   *
+   * <pre>
+   *   n        = unit(p_ghost - p_self)
+   *   overlap  = 2 * robotHalfSize - |p_ghost - p_self|        (only if > 0)
+   *   p_ghost += overlap * n                                   (the ghost gives up ALL of it;
+   *                                                             in the sim it gives up w_B)
+   *   if (v_self - v_ghost) . n > 0:                           (closing)
+   *     v_ghost -= ((v_ghost - v_self) . n) * n                (ghost matches us along n)
+   *   p_self, v_self: never changed
+   * </pre>
+   *
+   * So a ghost can be pushed and blocked by the real robot, and nothing here moves the real robot.
+   * How the real robot reacts to a ghost pushing on it is up to the robot code (on the robot,
+   * frc.robot.defense.VirtualContact makes the assist give way using the same {@link Contact}
+   * model).
+   *
+   * @param selfPose measured pose (field frame)
+   * @param selfVelocity measured field velocity (m/s)
+   * @param selfDesiredVelocity field velocity the robot is being commanded to drive at (m/s); the
+   *     pin referee counts contact only while this points into the opponent
+   */
+  public void stepWithRealSelf(
+      Pose selfPose, Vec2 selfVelocity, Vec2 selfDesiredVelocity, double dt) {
+    realSelf = new RealSelf(selfPose, selfVelocity, selfDesiredVelocity);
+    try {
+      step(ChassisCommand.STOP, dt);
+    } finally {
+      realSelf = null;
+    }
   }
 
   /**
@@ -194,18 +242,26 @@ public final class SimWorld {
         double effortA = Contact.effort(a.desiredVelocity(), n, a.maxSpeed());
         double effortB = Contact.effort(b.desiredVelocity(), n.times(-1.0), b.maxSpeed());
 
+        // Phase 7: a real robot (always "a": it is first in the list) is never moved by a ghost.
+        boolean realA = realSelf != null && a == self;
         double overlap = minDist - dist;
-        double shareB = Contact.overlapShareB(effortA, effortB);
-        a.setPosition(a.position().minus(n.times(overlap * (1.0 - shareB))));
+        double shareB = realA ? 1.0 : Contact.overlapShareB(effortA, effortB);
+        if (!realA) {
+          a.setPosition(a.position().minus(n.times(overlap * (1.0 - shareB))));
+        }
         b.setPosition(b.position().plus(n.times(overlap * shareB)));
 
         double closing = a.velocity().minus(b.velocity()).dot(n); // > 0 means approaching
         if (closing > 0) {
-          double vn = Contact.contactSpeed(effortA, effortB);
-          a.setVelocity(a.velocity().minus(n.times(a.velocity().dot(n) - vn)));
+          double vn = realA ? a.velocity().dot(n) : Contact.contactSpeed(effortA, effortB);
+          if (!realA) {
+            a.setVelocity(a.velocity().minus(n.times(a.velocity().dot(n) - vn)));
+          }
           b.setVelocity(b.velocity().minus(n.times(b.velocity().dot(n) - vn)));
         }
-        a.keepInside(field);
+        if (!realA) {
+          a.keepInside(field);
+        }
         b.keepInside(field);
       }
     }
