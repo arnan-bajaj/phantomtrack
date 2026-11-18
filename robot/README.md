@@ -48,7 +48,7 @@ src/main/java/frc/robot/              the thin WPILib layer: drivetrain, control
   project's `RobotSharedSourcesTest` fails if a listed sim file uses AWT, Swing, image IO, WPILib or
   the sim UI, and `CorePurityTest` keeps `phantom.core` free of all of those and of `phantom.sim`.
 - `frc.robot.defense` has no WPILib imports (`DefensePackagePurityTest`). All decisions live there
-  and are unit-tested: `./gradlew test` runs 76 tests without a robot or the HAL.
+  and are unit-tested: `./gradlew test` runs 83 tests without a robot or the HAL.
 - Core always works in the **blue frame**. `AllianceFrame` mirrors poses on the way in and
   commands on the way out when the Driver Station says red (`FieldMirror`, both rotated and
   mirrored fields; set `Constants.MIRROR` from the 2027 manual). The driver's sticks are the
