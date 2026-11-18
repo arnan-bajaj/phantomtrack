@@ -32,7 +32,7 @@ import phantom.core.tracking.TrackedRobot;
  * <pre>
  *   loop 0 (t = 0):      first call, dt = 0, p = 0
  *   loop 1 (t = 0.0625): p = 0.8175745 * 0.7575758 = 0.6193746            (< 0.7: not yet)
- *   loop 2 (t = 0.125):  p = 0.6193746 + (0.8175745 - 0.6193746) * 0.7575758 = 0.7695266  (enter)
+ *   loop 2 (t = 0.125):  p = 0.6193746 + (0.8175745 - 0.6193746) * 0.7575758 = 0.7695260  (enter)
  *   pin episode opens at t = 0.125 with 0 s; each later loop in contact adds 0.0625 s:
  *     contact(t) = t - 0.125
  * </pre>
@@ -54,6 +54,20 @@ class IdSwitchPinTest {
   /** One camera-only loop at loop index k. */
   private static Optional<DefenseTarget> loop(RulesGuard g, int k, List<TrackedRobot> tracks) {
     return g.apply(k * DT, new Pose(SELF, 0.0), tracks, Optional.empty());
+  }
+
+  @Test
+  void smoothingNumbersOfTheClassComment() {
+    // Audit L6: the class comment said 0.7695266 for loop 2; the arithmetic gives 0.7695260:
+    //   0.6193746 + (0.8175745 - 0.6193746) * 0.7575758 = 0.6193746 + 0.1501514 = 0.7695260
+    var g = new RulesGuard(PinRules.placeholder(), field(), 0.5);
+    loop(g, 0, seen(1000, 0.0));
+    loop(g, 1, seen(1000, DT));
+    assertEquals(0.6193746, g.lastContact().probability(), 1e-7);
+    assertFalse(g.lastContact().inContact());
+    loop(g, 2, seen(1000, 2 * DT));
+    assertEquals(0.7695260, g.lastContact().probability(), 1e-7);
+    assertTrue(g.lastContact().inContact());
   }
 
   @Test
@@ -106,7 +120,7 @@ class IdSwitchPinTest {
     }
     loop(g, 34, seen(1001, 34 * DT)); // new hypothesis: p = 0.6193746 < 0.7, not in contact yet
     assertEquals(0.0, g.contactSeconds(1001), TOL);
-    loop(g, 35, seen(1001, 35 * DT)); // p = 0.7695266: episode opens at t = 2.1875 with 0 s
+    loop(g, 35, seen(1001, 35 * DT)); // p = 0.7695260: episode opens at t = 2.1875 with 0 s
     assertEquals(0.0, g.contactSeconds(1001), TOL);
     // It would back off only at t = 2.1875 + 2.5 = 4.6875 (loop 75), 4.56 s after contact began:
     // a pin. Episode keys are what prevents this.
@@ -134,7 +148,7 @@ class IdSwitchPinTest {
     // belief for it restarts (the lost track's was dropped): p = 0.6193746, not in contact.
     loop(g, 38, seen(1001, 38 * DT));
     assertEquals(1.9375, g.contactSeconds(1001), TOL);
-    // Loop 39 (t = 2.4375): p = 0.7695266, touching again; the first loop of a touch adds nothing.
+    // Loop 39 (t = 2.4375): p = 0.7695260, touching again; the first loop of a touch adds nothing.
     loop(g, 39, seen(1001, 39 * DT));
     assertEquals(1.9375, g.contactSeconds(1001), TOL);
     // From loop 40 on +0.0625 per loop: 1.9375 + 9 * 0.0625 = 2.5 at loop 48 (t = 3.0).

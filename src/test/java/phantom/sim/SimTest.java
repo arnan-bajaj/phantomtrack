@@ -85,11 +85,15 @@ class SimTest {
     }
     assertEquals(DefenseAssist.State.ENGAGED, s.assist().lastState());
     // Measured on this 30 s run: Shadow alone (pin guard off) 0.749, old guard 0.801 (one lucky
-    // back-off), contact-sensing guard 0.709 (one back-off, sideways out of the path), guard with
-    // the speed-dependent margin 0.677 (it backs off at 1.91 s of contact instead of 2.5 s, so it
-    // spends longer out of the path). The bar is 0.65: still "mostly goal-side".
+    // back-off), contact-sensing guard 0.709, speed-dependent margin 0.677, Nov 17 back-off
+    // 0.765. The bar went 0.8 -> 0.7 -> 0.65 with those changes. Audit (docs/audit-2026-11.md,
+    // T1): the guard was never the cause. Shadow chased opponents driving away from the goal
+    // and sat inside them (fixed, M1: no back-off in this run any more); what is left is three
+    // ~3 s stretches where an opponent leaves its pickup ahead of us at our own top speed, which
+    // a 4.5 m/s defender cannot overtake. Now 0.767 with or without the guard; the bar is back to
+    // 0.7, its value before #15.
     assertTrue(
-        s.metrics().goalSideFraction() > 0.65,
+        s.metrics().goalSideFraction() > 0.7,
         "goal-side fraction was " + s.metrics().goalSideFraction());
   }
 

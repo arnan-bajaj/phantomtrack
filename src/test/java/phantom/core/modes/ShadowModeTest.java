@@ -62,6 +62,34 @@ class ShadowModeTest {
   }
 
   @Test
+  void anOpponentDrivingAwayFromTheGoalIsNotLedFurtherAway() {
+    // Audit M1. Opponent (5,4) driving away from the goal (10,4) at (-4,0); standoff 1.1, lead 0.25.
+    // Old: p_hat = (5,4) + 0.25*(-4,0) = (4,4), target = (4,4) + 1.1*(1,0) = (5.1,4): 0.1 m from
+    // its center, inside its bumpers (|standoff - |v| lead| = |1.1 - 1.0|).
+    // Now the lead drops the part of v that points away from the goal:
+    //   u0 = unit((10,4) - (5,4)) = (1,0), v.u0 = -4 -> v_lead = (-4,0) - (-4)*(1,0) = (0,0)
+    //   p_hat = (5,4), target = (5,4) + 1.1*(1,0) = (6.1,4): the standoff, 1.1 m ahead of it
+    var mode = new ShadowMode(1.1, 0.25);
+    var f = field(new Vec2(10, 4));
+    var t = mode.compute(ctx(f, new Vec2(8, 4), opp(0, 5, 4, -4, 0))).orElseThrow();
+    assertEquals(6.1, t.position().x(), TOL);
+    assertEquals(4.0, t.position().y(), TOL);
+    assertEquals(new Vec2(-4, 0), t.velocityFeedforward()); // still follows it
+    // Retreating at an angle, v = (-3,4): v.u0 = -3 -> v_lead = (-3,4) - (-3)*(1,0) = (0,4)
+    //   p_hat = (5,4) + 0.25*(0,4) = (5,5); goal - p_hat = (5,-1), |.| = sqrt(26) = 5.0990195
+    //   u = (0.9805807, -0.1961161), target = (5,5) + 1.1u = (6.0786387, 4.7842723),
+    //   1.3336208 m from (5,4) (was (5.3337329, 4.8115247), 0.8774680 m: bumpers overlapping)
+    var diag = mode.compute(ctx(f, new Vec2(8, 4), opp(0, 5, 4, -3, 4))).orElseThrow();
+    assertEquals(5.0 + 1.1 * 5.0 / Math.sqrt(26), diag.position().x(), TOL);
+    assertEquals(5.0 - 1.1 / Math.sqrt(26), diag.position().y(), TOL);
+    assertEquals(1.3336208, diag.position().distanceTo(new Vec2(5, 4)), 1e-7);
+    // Coming at the goal, v = (4,0): v.u0 = 4 >= 0 -> the full lead, as before:
+    //   p_hat = (6,4), target = (7.1,4)
+    var at = mode.compute(ctx(f, new Vec2(8, 4), opp(0, 5, 4, 4, 0))).orElseThrow();
+    assertEquals(7.1, at.position().x(), TOL);
+  }
+
+  @Test
   void neverPlacesTargetPastTheGoal() {
     // Opponent 0.4 m from goal, standoff 1.0: target must be the goal itself, not 0.6 m beyond it.
     var mode = new ShadowMode(1.0, 0.0);

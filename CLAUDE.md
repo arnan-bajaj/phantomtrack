@@ -61,12 +61,15 @@ against the real pose, safety rules; it compiles phantom/core plus 8 AWT-free si
 robot/shared-sources.txt, checked by RobotSharedSourcesTest). Nov 17: back-off for crowds
 (EscapePlanner sees every robot and where it will be, never along a pusher's path, 16 extra
 directions, yield when nothing is safe then slide out after 1 s; `PinMarginStudy` runs as
-`./gradlew pinMarginStudy --args=...`).
+`./gradlew pinMarginStudy --args=...`). Nov 18: audit (docs/audit-2026-11.md): NaN tracks dropped, red
+driver's sticks rotated on mirrored fields, Shadow/Interpose no longer lead an opponent away
+from the goal, rotation overrides the blend, clampInside and hold targets legal near walls,
+seeded randomized invariant tests (core InvariantTest, robot MirrorAndDriverInvariantTest).
 
 Key findings: Line mirror + hold is the safe default and is best or tied everywhere with a real
 (anonymous) camera; Cut-off + hold no longer wins anywhere with a camera; a realistic camera costs
 about half the effect and anonymity mostly costs man-to-man (driver re-points ~7.4/min). Open
-problems: pins are not zero (0.05-0.08 per 3 min with anonymous tracking + contact sensing, from
+problems: pins are not zero (0.03-0.09 per 3 min with anonymous tracking + contact sensing, from
 camera error near contact); every contact threshold, camera number and the command latency are
 placeholders; with 3 ghosts the back-off still lets contact reach ~5 s against Cyclers (and 11 s
 in one Evader run stuck at the geofence, which the core does not know about), while 1 ghost stays

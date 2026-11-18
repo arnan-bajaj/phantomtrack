@@ -81,6 +81,23 @@ class EpisodeKeysTest {
   }
 
   @Test
+  void beforeAnyFreshSightingTheLastReportedPositionCounts() {
+    // Audit L3. #5 is only ever reported stale (age 0.5 > 0.25): at (2,2) at t = 1.0, then at
+    // (2.9,2) at t = 1.1. Before any fresh sighting lastPos(5) must be its LAST reported position
+    // (2.9,2) (class comment); the code kept the first one, (2,2).
+    // At t = 1.2 new #6 appears at (3.85,2): |(3.85,2) - (2.9,2)| = 0.95 <= 1.0 -> it continues
+    // #5's open episode (key 5); from (2,2) it would be 1.85 > 1.0, a new key.
+    var k = keys();
+    k.rekey(1.0, List.of(r(5, 2, 2, 0.5)), id -> id == 5);
+    k.rekey(1.1, List.of(r(5, 2.9, 2, 0.6)), id -> id == 5);
+    var out = k.rekey(1.2, List.of(r(5, 2.9, 2, 0.7), r(6, 3.85, 2, 1.2)), id -> id == 5);
+    // #6 takes key 5; the stale #5 becomes its own episode with the first synthetic key
+    assertEquals(List.of(S, 5), ids(out));
+    assertEquals(5, k.keyOf(6));
+    assertEquals(1, k.rebinds());
+  }
+
+  @Test
   void aFreshTrackKeepsItsEpisode() {
     var k = keys();
     k.rekey(0.0, List.of(r(1000, 5.9, 5, 0.0)), id -> true);

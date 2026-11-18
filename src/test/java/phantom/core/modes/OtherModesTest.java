@@ -61,6 +61,20 @@ class OtherModesTest {
   }
 
   @Test
+  void interposeKeepsTheStandoffFromAnOpponentDrivingAway() {
+    // Audit M1. opp (10,4) moving (-4,0) away from goal (12,4); lambda 0.5, min 1.1, lead 0.25.
+    // Old: p_hat = (9,4), L = 3, dist = max(1.5, 1.1) = 1.5 -> target (10.5,4): 0.5 m from the
+    // opponent, under minStandoff 1.1 (and inside its bumpers).
+    // Now: u0 = (1,0), v.u0 = -4 -> v_lead = (0,0) -> p_hat = (10,4), L = 2,
+    //   dist = min(max(0.5 * 2, 1.1), 2) = 1.1 -> target (11.1,4); v_ff = 0.5 * (-4,0) = (-2,0)
+    var mode = new InterposeMode(0.5, 1.1, 0.25);
+    var t = mode.compute(ctx(field(new Vec2(12, 4)), new Vec2(15, 15), opp(0, 10, 4, -4, 0))).orElseThrow();
+    assertEquals(11.1, t.position().x(), TOL);
+    assertEquals(4.0, t.position().y(), TOL);
+    assertEquals(-2.0, t.velocityFeedforward().x(), TOL);
+  }
+
+  @Test
   void interposeRejectsBadLambda() {
     assertThrows(IllegalArgumentException.class, () -> new InterposeMode(1.5, 1.0, 0.0));
   }

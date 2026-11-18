@@ -2,6 +2,7 @@ package phantom.core.rules;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
@@ -120,6 +121,40 @@ class ContactDetectorTest {
     var tight =
         new ContactDetector(ContactDetector.Config.placeholder().withVisionError(0.2), 0.45);
     assertEquals(0.5, tight.visionCue(0.15), TOL);
+  }
+
+  @Test
+  void aConfigWithoutRampWidthIsRejected() {
+    // Audit M4. withVisionError(0) gave far = near = 0.05, so ramp(gap; 0.05, 0.05) divided by 0:
+    // a robot 1 m away got vision cue (1 - 0.05) / 0 = +inf -> 1 ("touching"), a touching one
+    // -inf -> 0, and gap 0.05 gave 0 / 0 = NaN, which then stays in the hypothesis for good.
+    // Every ramp needs a width the right way round, and every divisor must be positive.
+    var base = ContactDetector.Config.placeholder();
+    assertThrows(IllegalArgumentException.class, () -> base.withVisionError(0.0));
+    assertThrows(IllegalArgumentException.class, () -> base.withVisionError(-0.2));
+    assertThrows(IllegalArgumentException.class, () -> base.withVisionError(Double.NaN));
+    // stall ramp: none 0.60 must be above full; current 20 -> 40 A, decel 8 -> 20 m/s^2 rising
+    assertThrows(IllegalArgumentException.class, () -> copy(base, 1, 0.25)); // none = full
+    assertThrows(IllegalArgumentException.class, () -> copy(base, 4, 40.0)); // currentLow = high
+    assertThrows(IllegalArgumentException.class, () -> copy(base, 6, 25.0)); // decelLow > high
+    assertThrows(IllegalArgumentException.class, () -> copy(base, 8, 0.0)); // decelHoldSec 0
+    assertThrows(IllegalArgumentException.class, () -> copy(base, 0, 0.0)); // pushMinSpeed 0
+    assertThrows(IllegalArgumentException.class, () -> copy(base, 3, 0.0)); // freeAccel 0
+    // the placeholder and a positive vision error are fine: far = 0.05 + 0.4 = 0.45
+    assertEquals(0.45, base.withVisionError(0.4).visionGapFar(), TOL);
+  }
+
+  /** The placeholder config with field number {@code index} (declaration order) set to v. */
+  private static ContactDetector.Config copy(ContactDetector.Config c, int index, double v) {
+    double[] f = {
+      c.pushMinSpeed(), c.stallProgressNone(), c.stallProgressFull(), c.freeAccel(), c.currentLow(),
+      c.currentHigh(), c.decelLow(), c.decelHigh(), c.decelHoldSec(), c.visionGapNear(),
+      c.visionGapFar(), c.attributeGap(), c.attributeCos(), c.bias(), c.wStall(), c.wCurrent(),
+      c.wDecel(), c.wVision(), c.tauRise(), c.tauFall(), c.enterProbability(), c.exitProbability()
+    };
+    f[index] = v;
+    return new ContactDetector.Config(f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7], f[8], f[9],
+        f[10], f[11], f[12], f[13], f[14], f[15], f[16], f[17], f[18], f[19], f[20], f[21]);
   }
 
   @Test

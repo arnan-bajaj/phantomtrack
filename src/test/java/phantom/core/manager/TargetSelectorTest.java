@@ -74,6 +74,17 @@ class TargetSelectorTest {
   }
 
   @Test
+  void brokenTracksAreSkippedNotFatal() {
+    // Audit H1: a lone NaN track used to throw a NullPointerException here (no "best", no
+    // "nearest"), which would stop robot code. Now it counts as "nobody": keep the choice (-1).
+    var sel = new TargetSelector(2.0, 0.5);
+    var nan = opp(0, Double.NaN, 0, 2, 0, 0);
+    assertEquals(-1, sel.select(0, List.of(nan), GOAL));
+    // next to a good one, the good one is picked: (6,0) v 2 -> T 2
+    assertEquals(1, sel.select(0.02, List.of(nan, opp(1, 6, 0, 2, 0, 0.02)), GOAL));
+  }
+
+  @Test
   void lostTargetIsReplacedAtOnceAndEmptyKeepsChoice() {
     var sel = new TargetSelector(2.0, 0.5);
     sel.select(0.0, List.of(opp(0, 6, 0, 2, 0, 0.0), opp(1, 0, 0, 2, 0, 0.0)), GOAL); // -> A

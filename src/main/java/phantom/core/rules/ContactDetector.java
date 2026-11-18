@@ -113,6 +113,51 @@ public final class ContactDetector {
       double exitProbability) {
 
     /**
+     * Rejects configs the formulas cannot use. Every ramp needs a width, the right way round
+     * (ramp divides by oneAt - zeroAt: a zero width turns a far robot into "touching" and gives
+     * 0 / 0 = NaN at the edge, and a NaN never leaves a hypothesis), and every divisor must be
+     * positive:
+     *
+     * <pre>
+     *   pushMinSpeed > 0              (stall cue divides by |v_cmd| >= pushMinSpeed)
+     *   stallProgressNone > stallProgressFull,  freeAccel > 0
+     *   currentHigh > currentLow,  decelHigh > decelLow,  decelHoldSec > 0
+     *   visionGapFar > visionGapNear
+     *   tauRise >= 0,  tauFall >= 0,  0 <= exitProbability <= enterProbability <= 1
+     *   every number finite
+     * </pre>
+     */
+    public Config {
+      double[] all = {
+        pushMinSpeed, stallProgressNone, stallProgressFull, freeAccel, currentLow, currentHigh,
+        decelLow, decelHigh, decelHoldSec, visionGapNear, visionGapFar, attributeGap, attributeCos,
+        bias, wStall, wCurrent, wDecel, wVision, tauRise, tauFall, enterProbability, exitProbability
+      };
+      for (double v : all) {
+        if (!Double.isFinite(v)) {
+          throw new IllegalArgumentException("contact detector settings must be finite numbers");
+        }
+      }
+      require(pushMinSpeed > 0.0, "pushMinSpeed must be > 0");
+      require(stallProgressNone > stallProgressFull, "stallProgressNone must be above Full");
+      require(freeAccel > 0.0, "freeAccel must be > 0");
+      require(currentHigh > currentLow, "currentHigh must be above currentLow");
+      require(decelHigh > decelLow, "decelHigh must be above decelLow");
+      require(decelHoldSec > 0.0, "decelHoldSec must be > 0");
+      require(visionGapFar > visionGapNear,
+          "visionGapFar must be above visionGapNear (a vision error must be > 0)");
+      require(tauRise >= 0.0 && tauFall >= 0.0, "smoothing time constants must be >= 0");
+      require(exitProbability >= 0.0 && exitProbability <= enterProbability
+          && enterProbability <= 1.0, "need 0 <= exitProbability <= enterProbability <= 1");
+    }
+
+    private static void require(boolean ok, String message) {
+      if (!ok) {
+        throw new IllegalArgumentException(message);
+      }
+    }
+
+    /**
      * PLACEHOLDERS, every one of them, tuned only against the simulator. Set them from real
      * measurements with the calibration procedure in docs/findings/contact-sensing.md before
      * trusting the detector in a match.
@@ -146,6 +191,9 @@ public final class ContactDetector {
     /**
      * Same, with the vision ramp set for a camera with this typical position error (m):
      * visionGapFar = visionGapNear + error. On the robot, use the measured tracking error.
+     *
+     * @throws IllegalArgumentException if errorM is not a positive number (a zero-width ramp
+     *     would call a robot 1 m away "touching")
      */
     public Config withVisionError(double errorM) {
       return new Config(
@@ -182,7 +230,10 @@ public final class ContactDetector {
     return config;
   }
 
-  /** Linear ramp from 0 at {@code zeroAt} to 1 at {@code oneAt}, clamped to [0, 1]. */
+  /**
+   * Linear ramp from 0 at {@code zeroAt} to 1 at {@code oneAt}, clamped to [0, 1]. Needs
+   * zeroAt != oneAt ({@link Config} guarantees that for every ramp the detector uses).
+   */
   public static double ramp(double x, double zeroAt, double oneAt) {
     double t = (x - zeroAt) / (oneAt - zeroAt);
     return Math.max(0.0, Math.min(1.0, t));

@@ -10,7 +10,9 @@ import phantom.core.tracking.TrackedRobot;
  * retreating in front of the opponent.
  *
  * <pre>
- *   p_hat = p_opp + v_opp * lead
+ *   p_hat = p_opp + v_lead * lead,  v_lead = v_opp - min(0, v_opp . u0) u0,  u0 = unit(goal - p_opp)
+ *           (no lead away from the goal, as in {@link ShadowMode}: with it, an opponent driving away
+ *            had p* only minStandoff - |v| lead from its center)
  *   L     = |goal - p_hat|,  u = (goal - p_hat) / L
  *   dist  = min(max(lambda * L, minStandoff), L)
  *   p*    = p_hat + dist * u
@@ -58,7 +60,8 @@ public final class InterposeMode implements DefenseMode {
       return Optional.empty();
     }
     TrackedRobot opp = focus.get();
-    Vec2 predicted = opp.positionAt(ctx.timeSec() + leadSeconds);
+    Vec2 predicted =
+        ShadowMode.predictTowardGoal(opp, ctx.timeSec(), leadSeconds, ctx.field().defendedGoal());
     Vec2 toGoal = ctx.field().defendedGoal().minus(predicted);
     double length = toGoal.norm();
     Vec2 u = toGoal.normalized();

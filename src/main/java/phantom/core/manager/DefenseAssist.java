@@ -1,5 +1,6 @@
 package phantom.core.manager;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import phantom.core.control.ChassisCommand;
@@ -7,6 +8,7 @@ import phantom.core.control.DriverBlend;
 import phantom.core.control.HolonomicController;
 import phantom.core.control.RulesGuard;
 import phantom.core.field.FieldConfig;
+import phantom.core.geometry.Angles;
 import phantom.core.geometry.Pose;
 import phantom.core.geometry.Vec2;
 import phantom.core.modes.DefenseContext;
@@ -29,6 +31,9 @@ import phantom.core.tracking.TrackedRobot;
  * </pre>
  *
  * The same object will run inside the robot's teleop loop later; only the tracker changes.
+ *
+ * <p>Tracks with a NaN or infinite position, velocity or time are dropped before anything else
+ * sees them, whatever the tracker: a NaN must never reach a command.
  */
 public final class DefenseAssist {
   /** What happened on the last update, for logging and the sim HUD. */
@@ -91,7 +96,7 @@ public final class DefenseAssist {
    */
   public ChassisCommand update(
       double nowSec, Pose self, Vec2 selfVelocity, ChassisCommand driver, boolean engaged) {
-    List<TrackedRobot> opponents = tracker.getOpponents(nowSec);
+    List<TrackedRobot> opponents = finiteOnly(tracker.getOpponents(nowSec));
     lastOpponents = opponents;
     int focus = focusOpponentId;
     if (focus < 0 && useThreatSelector) {
@@ -112,24 +117,38 @@ public final class DefenseAssist {
     return lastCommand;
   }
 
+  /** The tracks whose position, velocity and time are all finite numbers. */
+  static List<TrackedRobot> finiteOnly(List<TrackedRobot> tracks) {
+    List<TrackedRobot> out = new ArrayList<>(tracks.size());
+    for (TrackedRobot r : tracks) {
+      if (r != null
+          && r.position().isFinite()
+          && r.velocity().isFinite()
+          && Double.isFinite(r.timestampSec())) {
+        out.add(r);
+      }
+    }
+    return out;
+  }
+
   private ChassisCommand decide(double nowSec, Pose self, ChassisCommand driver, boolean engaged) {
     if (!engaged) {
       lastState = State.OFF;
       return driver;
     }
-    if (blend.isOverriding(driver, controller.maxSpeed())) {
+    if (blend.isOverriding(driver, controller.maxSpeed(), controller.maxOmega())) {
       lastState = State.DRIVER_OVERRIDE;
       return driver;
     }
     if (lastTarget.isEmpty()) {
       lastState = State.SEARCHING;
       ChassisCommand search = controller.calculate(self, routeAroundObstacles(self, searchTarget(nowSec)));
-      return blend.blend(driver, search, true, controller.maxSpeed());
+      return blend.blend(driver, search, true, controller.maxSpeed(), controller.maxOmega());
     }
     boolean backing = guard != null && (guard.backingOff() || guard.blindBackingOff(nowSec));
     lastState = backing ? State.BACKING_OFF : State.ENGAGED;
     ChassisCommand assist = controller.calculate(self, routeAroundObstacles(self, lastTarget.get()));
-    return blend.blend(driver, assist, true, controller.maxSpeed());
+    return blend.blend(driver, assist, true, controller.maxSpeed(), controller.maxOmega());
   }
 
   /**
@@ -138,7 +157,7 @@ public final class DefenseAssist {
    * <pre>
    *   d       = unit(fieldCenter - goal)
    *   home    = goal + HOME_DISTANCE * d
-   *   heading = angle(d) + SCAN_AMPLITUDE * sin(SCAN_RATE * t)   (sweep the cameras)
+   *   heading = wrap(angle(d) + SCAN_AMPLITUDE * sin(SCAN_RATE * t))   (sweep the cameras)
    * </pre>
    */
   public DefenseTarget searchTarget(double nowSec) {
@@ -148,7 +167,7 @@ public final class DefenseAssist {
       d = new Vec2(-1.0, 0.0);
     }
     Vec2 home = field.clampInside(goal.plus(d.times(HOME_DISTANCE)));
-    double heading = d.angle() + SCAN_AMPLITUDE * Math.sin(SCAN_RATE * nowSec);
+    double heading = Angles.wrap(d.angle() + SCAN_AMPLITUDE * Math.sin(SCAN_RATE * nowSec));
     return new DefenseTarget(home, heading, Vec2.ZERO, -1);
   }
 

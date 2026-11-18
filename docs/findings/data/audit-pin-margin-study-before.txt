@@ -1,0 +1,61 @@
+
+cap   latency opps   n setup         peak  refPk  after  >2.5  >3.0 | late chased  into recon other | backoffs refPin  slowed  grid touch_s
+0.5 m/s   0 ms Cycler 1 LM+hold      1.92   0.32   1.58     0     0 |    0      0     0     0     0 |       28      0     +0%     -    13.0
+0.5 m/s   0 ms Cycler 1 CO+hold      0.64   0.30   0.00     0     0 |    0      0     0     0     0 |       28      0     +0%     -     6.2
+0.5 m/s   0 ms Cycler 3 LM+hold      3.26   0.32   2.40     3     1 |    0      3     0     0     0 |       64      0    -14%     -    21.0
+0.5 m/s   0 ms Cycler 3 CO+hold      3.68   0.34   3.26     4     3 |    0      4     0     0     0 |       75      0    -10%     -    28.0
+0.5 m/s   0 ms Evader 1 LM+hold      0.40   0.32   0.06     0     0 |    0      0     0     0     0 |       35      0     +0%     -     2.9
+0.5 m/s   0 ms Evader 1 CO+hold      0.44   0.32   0.12     0     0 |    0      0     0     0     0 |       23      0    +17%     -     2.5
+0.5 m/s   0 ms Evader 3 LM+hold      0.84   0.32   0.60     0     0 |    0      0     0     0     0 |       37      0     +0%     -     7.2
+0.5 m/s   0 ms Evader 3 CO+hold      4.52   0.62   0.92     1     1 |    0      1     0     0     0 |       40      0     +0%     -    11.2
+0.5 m/s 100 ms Cycler 1 LM+hold      0.36   0.32   0.02     0     0 |    0      0     0     0     0 |       28      0     +0%     -     2.8
+0.5 m/s 100 ms Cycler 1 CO+hold      1.20   0.28   0.92     0     0 |    0      0     0     0     0 |       28      0     +0%     -    11.7
+0.5 m/s 100 ms Cycler 3 LM+hold      3.32   0.32   0.02     6     6 |    0      6     0     0     0 |       72      0     +6%     -    22.6
+0.5 m/s 100 ms Cycler 3 CO+hold      5.06   0.34   5.02     5     4 |    0      5     0     0     0 |       69      0    -10%     -    28.7
+0.5 m/s 100 ms Evader 1 LM+hold      0.38   0.32   0.04     0     0 |    0      0     0     0     0 |       35      0     +0%     -     3.1
+0.5 m/s 100 ms Evader 1 CO+hold      0.42   0.32   0.12     0     0 |    0      0     0     0     0 |       23      0    +17%     -     2.6
+0.5 m/s 100 ms Evader 3 LM+hold      1.86   0.32   1.62     0     0 |    0      0     0     0     0 |       52      0     +0%     -    10.3
+0.5 m/s 100 ms Evader 3 CO+hold      5.22   1.10   0.24     1     1 |    0      1     0     0     0 |       42      0     +5%     -    11.1
+1.0 m/s   0 ms Cycler 1 LM+hold      1.54   1.18   0.36     0     0 |    0      0     0     0     0 |       37      0     +8%     -    19.8
+1.0 m/s   0 ms Cycler 1 CO+hold      2.32   1.18   1.12     0     0 |    0      0     0     0     0 |       36      0     +8%     -    39.8
+1.0 m/s   0 ms Cycler 3 LM+hold      3.70   1.40   2.02     7     2 |    0      6     1     0     0 |       70      0     +0%     -    51.6
+1.0 m/s   0 ms Cycler 3 CO+hold      4.88   1.18   3.82     6     1 |    0      6     0     0     0 |       68      0     -3%     -    50.2
+1.0 m/s   0 ms Evader 1 LM+hold      1.42   1.18   0.22     0     0 |    0      0     0     0     0 |       24      0     +8%     -    23.5
+1.0 m/s   0 ms Evader 1 CO+hold      1.20   1.14   0.06     0     0 |    0      0     0     0     0 |       48      0     +8%     -    24.0
+1.0 m/s   0 ms Evader 3 LM+hold      1.74   1.18   0.58     0     0 |    0      0     0     0     0 |       54      0    +11%     -    33.9
+1.0 m/s   0 ms Evader 3 CO+hold     11.10   1.16  10.16     1     1 |    0      1     0     0     0 |       61      0    +14%     -    43.7
+1.0 m/s 100 ms Cycler 1 LM+hold      1.68   1.18   0.50     0     0 |    0      0     0     0     0 |       37      0     +8%     -    21.5
+1.0 m/s 100 ms Cycler 1 CO+hold      2.40   1.14   1.24     0     0 |    0      0     0     0     0 |       36      0     +8%     -    45.9
+1.0 m/s 100 ms Cycler 3 LM+hold      4.68   1.16   3.50     5     2 |    0      5     0     0     0 |       56      0     +0%     -    44.9
+1.0 m/s 100 ms Cycler 3 CO+hold      4.08   1.18   3.06     5     3 |    0      4     1     0     0 |       69      0     -3%     -    50.7
+1.0 m/s 100 ms Evader 1 LM+hold      1.50   1.16   0.32     0     0 |    0      0     0     0     0 |       24      0     +8%     -    25.0
+1.0 m/s 100 ms Evader 1 CO+hold      1.22   1.14   0.08     0     0 |    0      0     0     0     0 |       35      0     +8%     -    25.9
+1.0 m/s 100 ms Evader 3 LM+hold      1.82   1.18   0.66     0     0 |    0      0     0     0     0 |       50      0    +11%     -    30.8
+1.0 m/s 100 ms Evader 3 CO+hold      2.00   1.14   0.90     0     0 |    0      0     0     0     0 |       49      0    +11%     -    32.2
+4.5 m/s   0 ms Cycler 1 LM+hold      1.96   1.84   0.10     0     0 |    0      0     0     0     0 |       34      0    +26%     -    67.1
+4.5 m/s   0 ms Cycler 1 CO+hold      1.66   1.66   0.00     0     0 |    0      0     0     0     0 |       38      0    +13%     -    60.9
+4.5 m/s   0 ms Cycler 3 LM+hold      2.34   1.84   1.78     0     0 |    0      0     0     0     0 |       46      0    +11%     -   113.9
+4.5 m/s   0 ms Cycler 3 CO+hold      3.54   1.84   2.26     7     3 |    0      5     1     0     1 |       62      0    +15%     -   132.4
+4.5 m/s   0 ms Evader 1 LM+hold      1.62   0.90   0.12     0     0 |    0      0     0     0     0 |       31      0    +34%     -    53.5
+4.5 m/s   0 ms Evader 1 CO+hold      0.50   0.50   0.04     0     0 |    0      0     0     0     0 |       40      0     +8%     -    28.0
+4.5 m/s   0 ms Evader 3 LM+hold      2.00   1.24   0.48     0     0 |    0      0     0     0     0 |       13      0    +13%     -    65.6
+4.5 m/s   0 ms Evader 3 CO+hold      2.22   1.82   0.38     0     0 |    0      0     0     0     0 |       23      0    +10%     -    72.9
+4.5 m/s 100 ms Cycler 1 LM+hold      2.48   1.84   0.62     0     0 |    0      0     0     0     0 |       64      0    +34%     -    78.6
+4.5 m/s 100 ms Cycler 1 CO+hold      2.10   1.84   0.24     0     0 |    0      0     0     0     0 |       37      0    +16%     -    55.7
+4.5 m/s 100 ms Cycler 3 LM+hold      3.40   1.84   1.76     2     1 |    0      1     1     0     0 |       47      0     +9%     -   107.9
+4.5 m/s 100 ms Cycler 3 CO+hold      4.60   1.92   3.20     7     4 |    0      0     7     0     0 |       73      0    +14%     -   131.5
+4.5 m/s 100 ms Evader 1 LM+hold      1.44   1.44   0.00     0     0 |    0      0     0     0     0 |       32      0    +30%     -    48.5
+4.5 m/s 100 ms Evader 1 CO+hold      0.38   0.38   0.00     0     0 |    0      0     0     0     0 |        0      0    +10%     -    21.8
+4.5 m/s 100 ms Evader 3 LM+hold      2.38   1.44   0.80     0     0 |    0      0     0     0     0 |       13      0    +15%     -    56.9
+4.5 m/s 100 ms Evader 3 CO+hold      1.72   1.40   1.20     0     0 |    0      0     0     0     0 |       16      0    +11%     -    70.7
+episodes over 2.5 s in total: 60
+  touching another ghost while over 2.5 s: 10; contact past 2.5 s: 54.4 s (yielding 5.1 s)
+  their contact: before the first back-off 50.6 s; after it, backing off on an exit 137.2 s, yielding 15.8 s, engaged again 1.4 s
+
+cap      ghosts |  raw peak  ref peak   >2.5  ref pins  slowed gridlocked
+0.5 m/s       1 |      1.92      0.32      0         0     +4%     0 of 8
+0.5 m/s       3 |      5.22      1.10     20         0     -3%     0 of 8
+1.0 m/s       1 |      2.40      1.18      0         0     +8%     0 of 8
+1.0 m/s       3 |     11.10      1.40     24         0     +5%     0 of 8
+4.5 m/s       1 |      2.48      1.84      0         0    +22%     0 of 8
+4.5 m/s       3 |      4.60      1.92     16         0    +13%     0 of 8

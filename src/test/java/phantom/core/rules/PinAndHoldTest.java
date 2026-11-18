@@ -102,6 +102,30 @@ class PinAndHoldTest {
     assertEquals(2.0, far.position().x(), TOL);
   }
 
+  @Test
+  void holdTargetIsClampedOutOfAWallCorner() {
+    // Audit L7 (found by InvariantTest). Choke field: lower wall (8.6,0)-(9.0,2.8), r = 0.45
+    // -> grown x (8.15, 9.45), y (-0.45, 3.25). We are at (9.6, 3.0), just right of its grown
+    // corner; the opponent touches us up-left at 135 deg: (9.6 - 0.6364, 3.0 + 0.6364)
+    // = (8.9636, 3.6364), outside the grown wall (y > 3.25), gap 0.
+    // goal-side: |self - goal| = |(-3.4, -1.035)| = 3.554 < |opp - goal| = 4.056 -> hold.
+    // n = (-0.7071, 0.7071), self + 0.3 n = (9.3879, 3.2121): INSIDE the grown wall (it was
+    // returned as is; every other mode clamps). Exits: left 1.2379, right 0.0621, down 3.6621,
+    // up 3.25 - 3.2121 = 0.0379 -> up: p* = (9.6 - 0.3 / sqrt 2, 3.25) = (9.3879, 3.25).
+    var mode = new HoldGroundMode(RETREAT, 0.3, 4.5);
+    var field = FieldConfig.choke();
+    Vec2 self = new Vec2(9.6, 3.0);
+    Vec2 opp = self.plus(Vec2.polar(0.9, Math.toRadians(135)));
+    var r = new TrackedRobot(0, opp, Vec2.ZERO, 0.0, 1.0);
+    var t = mode.compute(new DefenseContext(0.0, new Pose(self, 0), Vec2.ZERO, List.of(r), field, 0))
+        .orElseThrow();
+    assertEquals(9.6 - 0.3 / Math.sqrt(2), t.position().x(), TOL);
+    assertEquals(3.25, t.position().y(), TOL);
+    // still pushing toward the opponent at full effort
+    assertEquals(-4.5 / Math.sqrt(2), t.velocityFeedforward().x(), TOL);
+    assertEquals(4.5 / Math.sqrt(2), t.velocityFeedforward().y(), TOL);
+  }
+
   // ---------------- RulesGuard ----------------
 
   @Test

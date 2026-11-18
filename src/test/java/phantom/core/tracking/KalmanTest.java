@@ -127,4 +127,32 @@ class KalmanTest {
     assertEquals(1, tracker.getOpponents(1.0).size()); // age exactly 1.0: kept
     assertTrue(tracker.getOpponents(1.01).isEmpty()); // older: dropped
   }
+
+  @Test
+  void nonFiniteSightingsNeverEnterTheFilter() {
+    // Audit H1: one NaN sighting used to make the track NaN for good (and the assist's command
+    // with it). A sighting with a NaN or infinite position or time is now dropped, like
+    // MultiTargetTracker does.
+    var q = new Queue();
+    var tracker = new KalmanOpponentTracker(q, 0.01, 4.0, 1.0);
+    q.next.add(new Measurement(0, new Vec2(5, 5), 1.0));
+    tracker.getOpponents(1.0);
+    q.next.add(new Measurement(0, new Vec2(Double.NaN, 5), 1.1));
+    q.next.add(new Measurement(0, new Vec2(5, Double.POSITIVE_INFINITY), 1.15));
+    q.next.add(new Measurement(0, new Vec2(5, 5), Double.NaN));
+    TrackedRobot r = tracker.getOpponents(1.2).get(0);
+    // all three dropped: still the sighting at 1.0, untouched
+    assertEquals(5.0, r.position().x(), TOL);
+    assertEquals(5.0, r.position().y(), TOL);
+    assertEquals(0.0, r.velocity().x(), TOL);
+    assertEquals(1.0, r.timestampSec(), TOL);
+    // a good sighting afterwards is used normally: (5, 5) again at 1.25 keeps x = 5
+    q.next.add(new Measurement(0, new Vec2(5, 5), 1.25));
+    r = tracker.getOpponents(1.25).get(0);
+    assertTrue(r.position().isFinite() && r.velocity().isFinite());
+    assertEquals(1.25, r.timestampSec(), TOL);
+    // a non-finite first sighting never starts a track
+    q.next.add(new Measurement(1, new Vec2(Double.NaN, 1), 1.3));
+    assertEquals(1, tracker.getOpponents(1.3).size());
+  }
 }

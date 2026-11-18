@@ -62,6 +62,9 @@ public final class TargetSelector {
     double nearestDist = Double.POSITIVE_INFINITY;
     double currentT = Double.NaN;
     for (TrackedRobot r : opponents) {
+      if (!r.positionAt(nowSec).isFinite() || !r.velocity().isFinite()) {
+        continue; // a broken track can be neither the threat nor the nearest
+      }
       double t = timeToGoal(r, nowSec, goal);
       if (t < bestT) {
         bestT = t;
@@ -80,6 +83,9 @@ public final class TargetSelector {
     // First pick, or our target is no longer tracked: take the biggest threat now.
     if (current < 0 || Double.isNaN(currentT)) {
       TrackedRobot pick = best != null ? best : nearestToGoal;
+      if (pick == null) {
+        return current; // every track was broken: keep the choice, like an empty list
+      }
       if (current >= 0 && pick.id() != current) {
         switches++;
       }

@@ -28,6 +28,31 @@ class ObstacleTest {
   }
 
   @Test
+  void clampInsideNeverLeavesARobotInAnObstacleOnTheFieldWall() {
+    // Audit M3. Obstacle (0,2)-(1,6) is attached to the west field wall; r = 0.45 -> grown
+    // x (-0.45, 1.45), y (1.55, 6.45). From (0.45, 4):
+    //   left = 0.45 - (-0.45) = 0.9, right = 1.45 - 0.45 = 1.0, down = 4 - 1.55 = 2.45,
+    //   up = 6.45 - 4 = 2.45 -> the shortest is left, to (-0.45, 4), which is off the field.
+    // The wall clamp used to put it straight back at (0.45, 4), inside the obstacle. The nearest
+    // exit that is on the field is right: (1.45, 4).
+    var f = new FieldConfig("t", 10, 10, new Vec2(9, 5), List.of(), 0.45,
+        List.of(Obstacle.of(0, 2, 1, 6)), List.of());
+    Vec2 q = f.clampInside(new Vec2(0.45, 4));
+    assertEquals(1.45, q.x(), TOL);
+    assertEquals(4.0, q.y(), TOL);
+    assertFalse(f.obstacles().get(0).blocks(q, 0.45));
+    // In a field corner, obstacle (0,0)-(1,1), from (0.45, 0.45): left 0.9 and down 0.9 are off
+    // the field; right = 1.45 - 0.45 = 1.0 and up = 1.0 tie -> the first in the order left,
+    // right, down, up (Obstacle.pushOut's order): right, (1.45, 0.45).
+    var corner = new FieldConfig("t", 10, 10, new Vec2(9, 5), List.of(), 0.45,
+        List.of(Obstacle.of(0, 0, 1, 1)), List.of());
+    assertEquals(new Vec2(1.45, 0.45), corner.clampInside(new Vec2(0.45, 0.45)));
+    // When the shortest exit is on the field nothing changes: (0.7, 4) -> left 1.15, right
+    // 0.75 -> (1.45, 4), as before.
+    assertEquals(new Vec2(1.45, 4), f.clampInside(new Vec2(0.7, 4)));
+  }
+
+  @Test
   void pushOutTakesTheShortestWay() {
     // (3,1.7): left 1.5, right 1.5, down 1.7 - 1.5 = 0.2, up 3.5 - 1.7 = 1.8 -> down -> (3,1.5)
     assertEquals(new Vec2(3, 1.5), BOX.pushOut(new Vec2(3, 1.7), 0.5));
