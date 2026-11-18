@@ -55,7 +55,9 @@ import phantom.core.tracking.TrackedRobot;
  *     other episode whose track is lost or stale (older than FRESH_SECONDS) and that was
  *     touching within HANDOVER_SECONDS: the robot we were pushing, back under another track.
  *
- *   BACK OFF from id when contactSeconds(id) >= limit - safetyMargin, until a fresh estimate
+ *   BACK OFF from id when contactSeconds(id) >= limit - safetyMargin (safetyMargin from
+ *   {@link #safetyMarginFor}: slack + latency + one loop + time to slide one robot width out at
+ *   this robot's speed and acceleration), until a fresh estimate
  *   says gap >= resetSeparation (the episode itself stays open until the extra RESET_MARGIN, so
  *   touching again re-triggers at once), the episode ends, or MAX_BACKOFF_SECONDS pass. The direction comes from {@link EscapePlanner}: left, right or
  *   straight back, whichever does not hit a wall within D = BACKOFF_SPEED * LOOKAHEAD_SECONDS,
@@ -81,13 +83,16 @@ public final class RulesGuard {
   public static final double BACKOFF_SPEED = 3.0;
 
   /**
-   * Back off this long before the pin limit (s) at the speeds the guard was tuned for: back-off at
-   * BACKOFF_SPEED on a robot that accelerates at TUNED_ACCEL. See {@link #safetyMarginFor}.
+   * Real slack the guard keeps below the pin limit: it aims for at most limit - PEAK_SLACK of
+   * contact (2.5 s with the 3 s placeholder limit). See {@link #safetyMarginFor}.
    */
-  public static final double BASE_MARGIN = 0.5;
+  public static final double PEAK_SLACK = 0.5;
 
-  /** Acceleration of the simulated robot BASE_MARGIN was tuned on (m/s^2). */
-  public static final double TUNED_ACCEL = 6.0;
+  /** One control loop: a back-off decided now is first commanded on the next loop (s). */
+  public static final double LOOP_SECONDS = 0.02;
+
+  /** Command latency of the simulated robot (s): none beyond the loop. */
+  public static final double SIM_LATENCY_SECONDS = 0.0;
 
   /** How far ahead a back-off direction must be free of walls (s of travel at BACKOFF_SPEED). */
   public static final double LOOKAHEAD_SECONDS = 0.5;
@@ -183,49 +188,59 @@ public final class RulesGuard {
   }
 
   /**
-   * Time to drive one back-off STEP from standing still, accelerating at {@code accel} up to
+   * Time to drive {@code distance} from standing still, accelerating at {@code accel} up to
    * {@code speed} (trapezoid, no braking at the end):
    *
    * <pre>
-   *   d_acc = speed^2 / (2 accel)                 distance covered while speeding up
-   *   T     = sqrt(2 STEP / accel)                if STEP <= d_acc   (never reaches top speed)
-   *         = speed / accel + (STEP - d_acc) / speed                otherwise
+   *   d_acc = speed^2 / (2 accel)                       distance covered while speeding up
+   *   T     = sqrt(2 distance / accel)                  if distance <= d_acc
+   *         = speed / accel + (distance - d_acc) / speed  otherwise
    * </pre>
    *
-   * +infinity if speed or accel is not a positive number.
+   * +infinity if speed or accel is not a positive finite number (or distance is negative).
    */
-  public static double backoffSeconds(double speed, double accel) {
-    if (!(speed > 0.0) || !(accel > 0.0) || !Double.isFinite(speed) || !Double.isFinite(accel)) {
+  public static double moveSeconds(double distance, double speed, double accel) {
+    if (!(speed > 0.0) || !(accel > 0.0) || !Double.isFinite(speed) || !Double.isFinite(accel)
+        || !(distance >= 0.0)) {
       return Double.POSITIVE_INFINITY;
     }
     double dAcc = speed * speed / (2.0 * accel);
-    if (STEP <= dAcc) {
-      return Math.sqrt(2.0 * STEP / accel);
+    if (distance <= dAcc) {
+      return Math.sqrt(2.0 * distance / accel);
     }
-    return speed / accel + (STEP - dAcc) / speed;
+    return speed / accel + (distance - dAcc) / speed;
   }
 
   /**
-   * Safety margin for a robot whose back-off is limited to {@code maxSpeed} and {@code maxAccel}.
-   * BASE_MARGIN was tuned on a robot that backs off at BACKOFF_SPEED (3 m/s) and accelerates at
-   * TUNED_ACCEL (6 m/s^2). A slower robot needs longer to get out of contact, so it starts that
-   * much earlier:
+   * How long before the pin limit to start backing off, for a robot that backs off at most at
+   * {@code maxSpeed} with acceleration {@code maxAccel} and whose commands take
+   * {@code latencySec} to reach the wheels. The same rule runs in the simulator and on the robot.
    *
    * <pre>
-   *   v      = min(maxSpeed, BACKOFF_SPEED)                    (the back-off never asks for more)
-   *   T_ref  = backoffSeconds(BACKOFF_SPEED, TUNED_ACCEL)      = 3/6 + (1 - 0.75)/3 = 0.5833 s
-   *   margin = BASE_MARGIN + max(0, backoffSeconds(v, maxAccel) - T_ref)
+   *   v      = min(maxSpeed, BACKOFF_SPEED)          (the back-off never asks for more)
+   *   d      = 2 * robotHalfSize + CONTACT_TOLERANCE  (slide one robot width out of a head-on
+   *                                                   push, plus the contact tolerance)
+   *   margin = PEAK_SLACK + latencySec + LOOP_SECONDS + moveSeconds(d, v, maxAccel)
    *   clamped to at most limitSeconds (then the guard backs off as soon as contact starts)
    * </pre>
    *
-   * Examples: 4.5 m/s and 6 m/s^2 -> 0.5 s (unchanged); 1.0 m/s and 2 m/s^2 (the Phase 7 first
-   * test) -> 0.5 + (1.25 - 0.5833) = 1.1667 s, so it backs off at 3.0 - 1.1667 = 1.833 s.
+   * So contact should end by limit - PEAK_SLACK even if the back-off has to cover a whole robot
+   * width from standing still. Examples (half size 0.45 m, d = 0.95 m, limit 3 s):
+   * sim robot (3 m/s back-off, 6 m/s^2, no latency): 0.5 + 0 + 0.02 + 0.5667 = 1.0867 s;
+   * Phase 7 first test (1 m/s, 2 m/s^2, 0.1 s): 0.5 + 0.1 + 0.02 + 1.2 = 1.82 s.
    */
-  public static double safetyMarginFor(PinRules rules, double maxSpeed, double maxAccel) {
+  public static double safetyMarginFor(
+      PinRules rules, double robotHalfSize, double maxSpeed, double maxAccel, double latencySec) {
     double v = Math.min(maxSpeed, BACKOFF_SPEED);
-    double extra = backoffSeconds(v, maxAccel) - backoffSeconds(BACKOFF_SPEED, TUNED_ACCEL);
-    double margin = BASE_MARGIN + Math.max(0.0, extra);
-    return Math.min(margin, rules.limitSeconds());
+    double d = 2.0 * robotHalfSize + PinTimer.CONTACT_TOLERANCE;
+    double margin =
+        PEAK_SLACK + Math.max(0.0, latencySec) + LOOP_SECONDS + moveSeconds(d, v, maxAccel);
+    return Double.isFinite(margin) ? Math.min(margin, rules.limitSeconds()) : rules.limitSeconds();
+  }
+
+  /** The margin for the simulator's robot (4.5 m/s, 6 m/s^2, no extra latency): 1.0867 s. */
+  public static double simMargin(PinRules rules, double robotHalfSize) {
+    return safetyMarginFor(rules, robotHalfSize, 4.5, 6.0, SIM_LATENCY_SECONDS);
   }
 
   /** Back off this long before the limit (s). */
@@ -234,7 +249,8 @@ public final class RulesGuard {
   }
 
   public static RulesGuard defaults(FieldConfig field) {
-    return new RulesGuard(PinRules.placeholder(), field, BASE_MARGIN);
+    return new RulesGuard(
+        PinRules.placeholder(), field, simMargin(PinRules.placeholder(), field.robotHalfSize()));
   }
 
   /** Camera only: no drive telemetry this loop (we are treated as not pushing). */

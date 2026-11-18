@@ -165,52 +165,73 @@ class IdSwitchPinTest {
   // ---------------- speed-dependent safety margin ----------------
 
   @Test
-  void backoffTimeByHand() {
-    // 3 m/s, 6 m/s^2: d_acc = 9 / 12 = 0.75 < 1  ->  3/6 + (1 - 0.75)/3 = 0.5 + 0.0833333
-    assertEquals(0.5833333, RulesGuard.backoffSeconds(3.0, 6.0), 1e-7);
-    // 1 m/s, 2 m/s^2: d_acc = 1 / 4 = 0.25  ->  1/2 + (1 - 0.25)/1 = 1.25
-    assertEquals(1.25, RulesGuard.backoffSeconds(1.0, 2.0), TOL);
-    // 2 m/s, 4 m/s^2: d_acc = 4 / 8 = 0.5  ->  2/4 + (1 - 0.5)/2 = 0.75
-    assertEquals(0.75, RulesGuard.backoffSeconds(2.0, 4.0), TOL);
-    // 4.5 m/s, 10 m/s^2: d_acc = 20.25 / 20 = 1.0125 >= 1: never at top speed -> sqrt(2/10)
-    assertEquals(0.4472136, RulesGuard.backoffSeconds(4.5, 10.0), 1e-7);
-    // Not a positive number: it can never get away.
-    assertEquals(Double.POSITIVE_INFINITY, RulesGuard.backoffSeconds(0.0, 2.0));
-    assertEquals(Double.POSITIVE_INFINITY, RulesGuard.backoffSeconds(1.0, Double.NaN));
+  void moveTimeByHand() {
+    // d = 2 * 0.45 + 0.05 = 0.95 m (one robot width plus the contact tolerance)
+    // 3 m/s, 6 m/s^2: d_acc = 9 / 12 = 0.75 < 0.95  ->  3/6 + (0.95 - 0.75)/3 = 0.5 + 0.0666667
+    assertEquals(0.5666667, RulesGuard.moveSeconds(0.95, 3.0, 6.0), 1e-7);
+    // 1 m/s, 2 m/s^2: d_acc = 1 / 4 = 0.25  ->  1/2 + (0.95 - 0.25)/1 = 1.2
+    assertEquals(1.2, RulesGuard.moveSeconds(0.95, 1.0, 2.0), TOL);
+    // 0.5 m/s, 2 m/s^2: d_acc = 0.25 / 4 = 0.0625  ->  0.5/2 + (0.95 - 0.0625)/0.5 = 0.25 + 1.775
+    assertEquals(2.025, RulesGuard.moveSeconds(0.95, 0.5, 2.0), TOL);
+    // 0.5 m within d_acc = 0.75: never at top speed -> sqrt(2 * 0.5 / 6) = sqrt(1/6)
+    assertEquals(0.4082483, RulesGuard.moveSeconds(0.5, 3.0, 6.0), 1e-7);
+    assertEquals(0.0, RulesGuard.moveSeconds(0.0, 1.0, 2.0), TOL);
+    // Not a positive speed / accel, or a negative distance: it can never get there.
+    assertEquals(Double.POSITIVE_INFINITY, RulesGuard.moveSeconds(0.95, 0.0, 2.0));
+    assertEquals(Double.POSITIVE_INFINITY, RulesGuard.moveSeconds(0.95, 1.0, Double.NaN));
+    assertEquals(Double.POSITIVE_INFINITY, RulesGuard.moveSeconds(-1.0, 1.0, 2.0));
   }
 
   @Test
-  void safetyMarginGrowsWithTheExtraBackoffTime() {
+  void safetyMarginByHand() {
     PinRules rules = PinRules.placeholder(); // 3.0 s
-    // Simulator robot: v = min(4.5, 3) = 3, a = 6 -> extra 0 -> 0.5 (unchanged)
-    assertEquals(0.5, RulesGuard.safetyMarginFor(rules, 4.5, 6.0), TOL);
-    // Phase 7 first test: 0.5 + (1.25 - 0.5833333) = 1.1666667 -> backs off at 1.8333333 s
-    assertEquals(1.1666667, RulesGuard.safetyMarginFor(rules, 1.0, 2.0), 1e-7);
-    // 2 m/s, 4 m/s^2: 0.5 + (0.75 - 0.5833333) = 0.6666667
-    assertEquals(0.6666667, RulesGuard.safetyMarginFor(rules, 2.0, 4.0), 1e-7);
-    // Faster than tuned: v = 3, a = 10: d_acc = 0.45 -> 0.3 + 0.55/3 = 0.4833333 < 0.5833333
-    // -> max(0, negative) = 0 -> never less than 0.5
-    assertEquals(0.5, RulesGuard.safetyMarginFor(rules, 4.5, 10.0), TOL);
-    // 0.1 m/s, 2 m/s^2: d_acc = 0.0025 -> 0.05 + 0.9975/0.1 = 10.025 -> 0.5 + 9.4416667 = 9.94
-    // -> clamped to the 3.0 s limit (back off as soon as contact starts)
-    assertEquals(3.0, RulesGuard.safetyMarginFor(rules, 0.1, 2.0), TOL);
-    assertEquals(3.0, RulesGuard.safetyMarginFor(rules, 0.0, 2.0), TOL);
-    assertEquals(3.0, RulesGuard.safetyMarginFor(rules, Double.NaN, 2.0), TOL);
+    // margin = 0.5 slack + latency + 0.02 loop + moveSeconds(0.95, min(v, 3), a)
+    // Simulator robot: v = min(4.5, 3) = 3, a = 6, no latency: 0.5 + 0 + 0.02 + 0.5666667
+    assertEquals(1.0866667, RulesGuard.safetyMarginFor(rules, 0.45, 4.5, 6.0, 0.0), 1e-7);
+    assertEquals(1.0866667, RulesGuard.simMargin(rules, 0.45), 1e-7);
+    // Same robot, 0.1 s latency: 1.0866667 + 0.1
+    assertEquals(1.1866667, RulesGuard.safetyMarginFor(rules, 0.45, 4.5, 6.0, 0.1), 1e-7);
+    // Phase 7 first test, 1 m/s, 2 m/s^2, 0.1 s: 0.5 + 0.1 + 0.02 + 1.2 = 1.82 (back off at 1.18 s)
+    assertEquals(1.82, RulesGuard.safetyMarginFor(rules, 0.45, 1.0, 2.0, 0.1), 1e-9);
+    // 0.5 m/s, 2 m/s^2, 0.1 s: 0.5 + 0.1 + 0.02 + 2.025 = 2.645 (back off at 0.355 s)
+    assertEquals(2.645, RulesGuard.safetyMarginFor(rules, 0.45, 0.5, 2.0, 0.1), 1e-9);
+    // A negative latency counts as 0: 0.5 + 0 + 0.02 + 1.2 = 1.72
+    assertEquals(1.72, RulesGuard.safetyMarginFor(rules, 0.45, 1.0, 2.0, -0.5), 1e-9);
+    // 0.1 m/s: d_acc = 0.0025 -> 0.05 + 0.9475/0.1 = 9.525 -> 10.145 > 3 -> clamped to the limit
+    // (back off as soon as contact starts)
+    assertEquals(3.0, RulesGuard.safetyMarginFor(rules, 0.45, 0.1, 2.0, 0.1), TOL);
+    assertEquals(3.0, RulesGuard.safetyMarginFor(rules, 0.45, 0.0, 2.0, 0.1), TOL);
+    assertEquals(3.0, RulesGuard.safetyMarginFor(rules, 0.45, Double.NaN, 2.0, 0.1), TOL);
   }
 
   @Test
   void slowRobotBacksOffAtItsOwnWarningThreshold() {
-    double margin = RulesGuard.safetyMarginFor(PinRules.placeholder(), 1.0, 2.0); // 1.1666667
+    double margin = RulesGuard.safetyMarginFor(PinRules.placeholder(), 0.45, 1.0, 2.0, 0.1); // 1.82
     var g = new RulesGuard(PinRules.placeholder(), field(), margin);
-    // Warning threshold 3.0 - 1.1666667 = 1.8333333. contact(t) = t - 0.125:
-    //   loop 31 (t = 1.9375): 1.8125 < 1.8333 -> not yet
-    //   loop 32 (t = 2.0):    1.875 >= 1.8333 -> back off
-    for (int k = 0; k <= 31; k++) {
+    // Warning threshold 3.0 - 1.82 = 1.18. contact(t) = t - 0.125:
+    //   loop 20 (t = 1.25):   1.125 < 1.18 -> not yet
+    //   loop 21 (t = 1.3125): 1.1875 >= 1.18 -> back off
+    for (int k = 0; k <= 20; k++) {
       loop(g, k, seen(1000, k * DT));
     }
     assertFalse(g.backingOff());
-    loop(g, 32, seen(1000, 32 * DT));
-    assertEquals(1.875, g.contactSeconds(1000), TOL);
+    loop(g, 21, seen(1000, 21 * DT));
+    assertEquals(1.1875, g.contactSeconds(1000), TOL);
+    assertTrue(g.backingOff());
+  }
+
+  @Test
+  void defaultGuardUsesTheSimRobotMargin() {
+    // RulesGuard.defaults: margin 1.0866667 -> threshold 3.0 - 1.0866667 = 1.9133333.
+    //   loop 32 (t = 2.0):    1.875 < 1.9133 -> not yet
+    //   loop 33 (t = 2.0625): 1.9375 >= 1.9133 -> back off
+    var g = RulesGuard.defaults(field());
+    assertEquals(1.0866667, g.safetyMargin(), 1e-7);
+    for (int k = 0; k <= 32; k++) {
+      loop(g, k, seen(1000, k * DT));
+    }
+    assertFalse(g.backingOff());
+    loop(g, 33, seen(1000, 33 * DT));
     assertTrue(g.backingOff());
   }
 }

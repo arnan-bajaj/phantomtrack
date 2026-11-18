@@ -284,41 +284,29 @@ class PhantomTrackTest {
 
   @Test
   void pinGuardMarginComesFromTheTestCaps() {
-    // RulesGuard.safetyMarginFor at 1.0 m/s, 2.0 m/s^2:
-    //   backoff T = 1/2 + (1 - 1/4)/1 = 1.25 s, tuned T_ref = 3/6 + (1 - 0.75)/3 = 0.5833333 s
-    //   margin = 0.5 + (1.25 - 0.5833333) = 1.1666667 s -> backs off at 3.0 - 1.1666667 = 1.833 s
+    // RulesGuard.safetyMarginFor at 1.0 m/s, 2.0 m/s^2, assumed latency 0.1 s:
+    //   slide d = 2 * 0.45 + 0.05 = 0.95 m: d_acc = 1/4 = 0.25 -> T = 1/2 + (0.95 - 0.25)/1 = 1.2 s
+    //   margin = 0.5 + 0.1 + 0.02 + 1.2 = 1.82 s -> backs off at 3.0 - 1.82 = 1.18 s of contact
     GhostSession s = new GhostSession(GhostSettings.firstTest(), SafetyConfig.firstTest(), START);
-    assertEquals(1.1666667, s.assist().pinSafetyMargin(), 1e-7);
+    assertEquals(1.82, s.assist().pinSafetyMargin(), 1e-9);
   }
 
   @Test
-  void anyTouchPinTimerStaysWithinTheLimitAtFirstTestSpeeds() {
-    // 300 s of Cut-off + hold against one 1.0 m/s Cycler, perfect drivetrain. With the old fixed
-    // 0.5 s margin the guard's any-touch timer reached 3.82 s here (11 episodes over 3 s): a
-    // back-off at 1 m/s takes about 1.2 s to break contact. With the speed-dependent margin it
-    // peaks at 3.00 s (no slack: same as the simulator's 4.5 m/s robot, which peaks at 2.82 s).
-    settle(40);
-    pt.selectMode(GhostSession.MODE_CUTOFF);
-    pt.toggleHold();
-    settle(5);
-    Pose pose = START;
-    Vec2 velocity = Vec2.ZERO;
-    double maxPin = 0.0;
-    for (int i = 0; i < 15000; i++) {
-      ChassisCommand out =
-          pt.update(
-              new PhantomTrack.Input(
-                  now(), RobotMode.TELEOP, pose, velocity, now(), ChassisCommand.STOP, 0.0, 1.0));
-      k++;
-      velocity = out.velocity();
-      pose =
-          new Pose(
-              pose.position().plus(out.velocity().times(DT)),
-              Angles.wrap(pose.heading() + out.omega() * DT));
-      maxPin = Math.max(maxPin, pt.maxPinSeconds());
+  void oneGhostContactStaysUnderTwoAndAHalfSecondsWithLatency() {
+    // 300 s of Cut-off + hold against one 1.0 m/s Cycler, perfect drivetrain that applies each
+    // command 0 or 100 ms late (PinMarginStudy). With the old margin (1.17 s, no latency) the
+    // any-touch timer peaked at 3.00 s / 3.10 s; the target is 2.5 s (0.5 s of real slack).
+    for (int latencyLoops : new int[] {0, 5}) {
+      PinMarginStudy.Result r =
+          PinMarginStudy.run(
+              new PinMarginStudy.Config(
+                  1.0, 2.0, latencyLoops, Scenarios.OpponentKind.CYCLER, 1,
+                  GhostSession.MODE_CUTOFF),
+              300.0,
+              false);
+      assertTrue(r.peak() <= 2.5 + 1e-6, latencyLoops * 20 + " ms: peak " + r.peak());
+      assertTrue(r.peak() > 1.0, "expected real contact in this run: " + r.peak());
+      assertEquals(0, r.refPins());
     }
-    assertTrue(maxPin <= 3.0 + 1e-6, "any-touch pin timer peaked at " + maxPin);
-    assertTrue(maxPin > 1.8, "expected real contact in this run: " + maxPin);
-    assertEquals(0, pt.pinViolations());
   }
 }

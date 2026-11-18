@@ -44,18 +44,21 @@ IntentPredictor + Cut-off mode. Nov 16 work, integrated: contact sensing (Contac
 drivetrain stall/current/deceleration with the camera; wall-aware EscapePlanner back-off),
 anonymous tracking (AnonymousSensor with partners, color errors, clutter, occlusion;
 MultiTargetTracker with re-acquisition), pin time keyed by contact episode (EpisodeKeys) so it
-survives track id changes, a pin-guard margin that grows with the robot's back-off time
-(`RulesGuard.safetyMarginFor`), and Phase 7 software (`robot/`: WPILib project, ghost opponents
+survives track id changes, a pin-guard margin from the robot's back-off time and command latency
+(`RulesGuard.safetyMarginFor`: 0.5 s slack + latency + loop + time to slide one robot width; same
+rule in sim and robot, `robot/.../PinMarginStudy` measures it), and Phase 7 software (`robot/`: WPILib project, ghost opponents
 against the real pose, safety rules; it compiles phantom/core plus 8 AWT-free sim files listed in
 robot/shared-sources.txt, checked by RobotSharedSourcesTest).
 
-Key findings: Line mirror + hold is the safe default and holds up best with a real (anonymous)
-camera; Cut-off + hold is the specialist for dodgers at a gap; a realistic camera costs about half
-the effect and anonymity mostly costs man-to-man (driver re-points ~7.5/min). Open problems: pins
-are not zero (0.13-0.18 per 3 min with anonymous tracking + contact sensing, from camera error near
-contact); every contact threshold and camera number is a placeholder; with several robots around,
-the back-off can get wedged. Remaining items need the real robot (Phase 7 test session, contact
-calibration, camera measurements, Phase 8 vision) or the 2027 game (FieldConfig, PinRules).
+Key findings: Line mirror + hold is the safe default and is best or tied everywhere with a real
+(anonymous) camera; Cut-off + hold no longer wins anywhere with a camera; a realistic camera costs
+about half the effect and anonymity mostly costs man-to-man (driver re-points ~7.4/min). Open
+problems: pins are not zero (0.08-0.09 per 3 min with anonymous tracking + contact sensing, from
+camera error near contact); every contact threshold, camera number and the command latency are
+placeholders; the back-off maneuver itself fails with several robots around (slides into a second
+robot, gets chased to the geofence: up to 14 s of contact with 3 ghosts) and needs a redesign.
+Remaining items need the real robot (Phase 7 test session, contact calibration, latency and camera
+measurements, Phase 8 vision) or the 2027 game (FieldConfig, PinRules).
 
 ## Workflow
 
