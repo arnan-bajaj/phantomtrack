@@ -29,9 +29,10 @@ import phantom.core.geometry.Vec2;
  * <p><b>Head-on in a gap (Cyclers only, audit M5).</b> Two Cyclers that meet head-on inside a gap
  * would push each other forever (equal effort stalls, and inside the gap the straight path is not
  * blocked, so the gate rule above never runs). So: when another Cycler with a higher id is
- * touching us (bumper gap at most 0.05 m), both are under 0.3 m/s, both drive into each other
- * (pushing effort above 0.5, as in {@link Contact#effort}), and the midpoint of the two is within
- * 1.0 m of a gate, for 1.0 s in a row, the lower id backs out to
+ * touching us (bumper gap at most 0.05 m), both drive into each other (pushing effort above 0.5,
+ * as in {@link Contact#effort}) and the midpoint of the two is within 1.0 m of a gate, for 1.0 s
+ * in a row, and over that second neither moved 0.3 m or more (net displacement, 0.3 m/s x 1 s; not
+ * the body's velocity, which collisions keep high in a crowded jam), the lower id backs out to
  *
  * <pre>
  *   u    = unit(gate - p_me)          (or unit(gate - dest_other) if we sit on the gate)
@@ -83,6 +84,8 @@ public final class CyclerBehavior implements OpponentBehavior {
   private double stuckFor = 0.0;
   private double bulldozeUntil = -1.0;
   private int headOnWith = -1;
+  private Vec2 headOnAnchorMe = Vec2.ZERO;
+  private Vec2 headOnAnchorOther = Vec2.ZERO;
   private double headOnFor = 0.0;
   private int yieldingTo = -1;
   private Vec2 yieldTarget = Vec2.ZERO;
@@ -299,8 +302,6 @@ public final class CyclerBehavior implements OpponentBehavior {
       }
       Vec2 n = b.position().minus(me.position()).normalized();
       if (b.position().distanceTo(me.position()) > touch
-          || me.velocity().norm() >= STUCK_SPEED
-          || b.velocity().norm() >= STUCK_SPEED
           || Contact.effort(me.desiredVelocity(), n, me.maxSpeed()) <= HEAD_ON_EFFORT
           || Contact.effort(b.desiredVelocity(), n.times(-1.0), b.maxSpeed()) <= HEAD_ON_EFFORT) {
         continue;
@@ -322,9 +323,31 @@ public final class CyclerBehavior implements OpponentBehavior {
       headOnFor = 0.0;
       return null;
     }
-    headOnFor = found == headOnWith ? headOnFor + dt : dt;
-    headOnWith = found;
-    if (headOnFor < HEAD_ON_SECONDS) {
+    Vec2 otherPos = null;
+    for (SimWorld.Opponent o : world.opponents()) {
+      if (o.body().id() == found) {
+        otherPos = o.body().position();
+      }
+    }
+    if (found != headOnWith) {
+      headOnWith = found;
+      headOnFor = 0.0;
+      headOnAnchorMe = me.position();
+      headOnAnchorOther = otherPos;
+    }
+    headOnFor += dt;
+    if (headOnFor < HEAD_ON_SECONDS - 1e-9) {
+      return null;
+    }
+    // Stalled = neither got anywhere over the window. Net displacement, not the body's velocity:
+    // in a crowd, collisions can keep the velocity high (and the position jittering by 0.01 m a
+    // step) while the robot stands still.
+    double limit = STUCK_SPEED * HEAD_ON_SECONDS;
+    if (me.position().distanceTo(headOnAnchorMe) >= limit
+        || otherPos.distanceTo(headOnAnchorOther) >= limit) {
+      headOnFor = 0.0; // still moving through: start a new window from here
+      headOnAnchorMe = me.position();
+      headOnAnchorOther = otherPos;
       return null;
     }
     yieldingTo = found;

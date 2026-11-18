@@ -167,6 +167,34 @@ class HeadOnGapTest {
   }
 
   @Test
+  void aJamWithOurRobotWedgedInTheGapStillResolves() {
+    // Found in the U1 comparison (--batch-anon, two lanes, Cut-off + hold, seed 5): our robot
+    // wedged at the bottom of the lower gap (yielding, not pushing) and two Cyclers head-on above
+    // it. Collisions kept their body velocities at 0.3-1.0 m/s while they stood still, so a
+    // velocity-based stall check never fired: 22.5 s of referee contact. Rebuilt by hand on the
+    // two-lane field: our robot at (8.85, 1.45) (grown lower wall top = 1.0 + 0.45), Cycler #0 from
+    // (7.0, 2.35) east to (13, 4.035), Cycler #2 from (10.6, 2.35) west to (3, 4.035).
+    // With the velocity check: stuck at (8.45, 2.13) / (9.35, 2.29) from t ~ 2 s, 0 cycles in
+    // 30 s. With net displacement over the 1 s window: 4 cycles each.
+    FieldConfig f = FieldConfig.twoLanes();
+    RobotBody self = RobotBody.typical(100, new Pose(new Vec2(8.85, 1.45), 0.0));
+    RobotBody east = RobotBody.typical(0, new Pose(new Vec2(7.0, 2.35), 0.0));
+    RobotBody west = RobotBody.typical(2, new Pose(new Vec2(10.6, 2.35), Math.PI));
+    SimWorld w = new SimWorld(f, self, List.of(
+        new SimWorld.Opponent(east,
+            new CyclerBehavior(new Vec2(1.5, 1.2), new Vec2(13.0, 4.035), 1.5, 0.5)),
+        new SimWorld.Opponent(west,
+            new CyclerBehavior(new Vec2(14.0, 1.0), new Vec2(3.0, 4.035), 1.5, 0.5))));
+    for (int i = 0; i < (int) Math.round(30.0 / DT); i++) {
+      w.step(ChassisCommand.STOP, DT);
+    }
+    assertTrue(w.opponents().get(0).behavior().cyclesCompleted() >= 3,
+        "#0 cycles " + w.opponents().get(0).behavior().cyclesCompleted());
+    assertTrue(w.opponents().get(1).behavior().cyclesCompleted() >= 3,
+        "#2 cycles " + w.opponents().get(1).behavior().cyclesCompleted());
+  }
+
+  @Test
   void twoLaneCyclersAt10msNoLongerDeadlock() {
     // The audit's failing input: two lanes, no defense, Cyclers, 180 s at dt = 10 ms. Before the
     // fix opponents #0 and #2 stopped in the lower gap at t ~ 27 s with 3 and 4 cycles. At 20 ms
