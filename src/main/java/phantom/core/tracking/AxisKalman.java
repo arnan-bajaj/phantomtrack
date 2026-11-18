@@ -65,6 +65,24 @@ public final class AxisKalman {
     p11 = p11 - k1 * oldP01;
   }
 
+  /**
+   * Where {@link #predict} would put the position after dt more seconds, WITHOUT changing the
+   * filter: p + v dt. A multi-target tracker uses this to test a detection against a track before
+   * deciding which track gets it.
+   */
+  public double predictedPosition(double dt) {
+    return p + v * dt;
+  }
+
+  /**
+   * The position variance {@link #predict} would give after dt more seconds, WITHOUT changing the
+   * filter: P00 + 2 dt P01 + dt^2 P11 + sigmaA^2 dt^4 / 4 (the first predict line above).
+   */
+  public double predictedPositionVar(double dt, double sigmaA) {
+    double dt2 = dt * dt;
+    return p00 + 2.0 * dt * p01 + dt2 * p11 + sigmaA * sigmaA * dt2 * dt2 / 4.0;
+  }
+
   public double position() {
     return p;
   }

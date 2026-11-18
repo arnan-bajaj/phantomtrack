@@ -58,6 +58,31 @@ public final class Scenarios {
 
   /** Three opponents of the given kind, one per pickup; our robot starts at selfStart. */
   public static SimWorld three(FieldConfig field, OpponentKind kind, Pose selfStart) {
+    return three(field, kind, selfStart, false);
+  }
+
+  /** Body ids of the two alliance partners. */
+  public static final int FIRST_PARTNER_ID = 200;
+
+  /**
+   * Same, optionally with two alliance partners on our side.
+   *
+   * <p>Partner layout (made up, like the rest of the placeholder field): our alliance mirrors the
+   * opponents' layout through the field's center line, so partners load where the first two
+   * opponent pickups would be on the far side and score at the mirror image of the goal we defend:
+   *
+   * <pre>
+   *   mirror(p) = (fieldLength - p.x, p.y)
+   *   partner i:  pickup = mirror(opponentPickups[i]),  goal = mirror(defendedGoal)
+   * </pre>
+   *
+   * So partners cross the whole field through our defensive area and through the opponents'
+   * lanes, as real partners do in games where you load at the far end. They always drive like
+   * Evaders (steer around robots, human reaction delay), even when the opponents are Cyclers: a
+   * teammate does not drive through its own defender.
+   */
+  public static SimWorld three(
+      FieldConfig field, OpponentKind kind, Pose selfStart, boolean withPartners) {
     RobotBody self = RobotBody.typical(100, selfStart);
     List<SimWorld.Opponent> opps = new ArrayList<>();
     int id = 0;
@@ -71,6 +96,20 @@ public final class Scenarios {
       opps.add(new SimWorld.Opponent(body, behavior));
       id++;
     }
-    return new SimWorld(field, self, opps);
+    List<SimWorld.Opponent> partners = new ArrayList<>();
+    if (withPartners) {
+      Vec2 ourGoal = mirror(field, field.defendedGoal());
+      for (int i = 0; i < 2 && i < field.opponentPickups().size(); i++) {
+        Vec2 pickup = mirror(field, field.opponentPickups().get(i));
+        RobotBody body = RobotBody.typical(FIRST_PARTNER_ID + i, new Pose(pickup, Math.PI));
+        partners.add(new SimWorld.Opponent(body, CyclerBehavior.evader(pickup, ourGoal, 1.5, 0.5)));
+      }
+    }
+    return new SimWorld(field, self, opps, partners);
+  }
+
+  /** Reflection through the field's center line x = length / 2. */
+  public static Vec2 mirror(FieldConfig field, Vec2 p) {
+    return new Vec2(field.length() - p.x(), p.y());
   }
 }
