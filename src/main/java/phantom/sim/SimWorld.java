@@ -338,6 +338,14 @@ public final class SimWorld {
     return pinViolations;
   }
 
+  /**
+   * The referee's contact time in the open pin episode with this opponent (s): only time we spent
+   * touching it while driving into it. 0 if no episode is open.
+   */
+  public double refereeContactSeconds(int opponentId) {
+    return refereePins.contactSeconds(opponentId);
+  }
+
   /** Ids of the opponents our robot was physically touching during the last step (truth). */
   public Set<Integer> selfTouchingNow() {
     return Set.copyOf(touchingNow);

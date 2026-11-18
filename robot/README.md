@@ -259,16 +259,17 @@ here as a pose jump and switches the assist off (that is intended).
   about 1.18 s of contact. **Measure the latency** (command step vs measured velocity in the log)
   and update that constant.
 - **Use ONE ghost for contact tests.** In `PinMarginStudy` (run it with
-  `./gradlew test --tests '*PinMarginStudy*' -Dpt.study=true`), one ghost stays at or under 2.5 s
-  of contact in 22 of 24 setups, with and without 100 ms extra latency. With three ghosts the
-  back-off can slide into a second ghost and then be chased along the pusher's path to the
-  geofence, with up to 14 s of contact (the referee count stayed 0). See
-  `docs/findings/robot-pin-margin.md`.
+  `./gradlew pinMarginStudy --args="out=build/pin-margin-study"`; switches are program arguments,
+  never `-D`), one ghost stays at or under 2.5 s of contact in all 24 setups, with and without
+  100 ms extra latency. With three ghosts, Cyclers still reach about 5 s of contact and one
+  Evader run 11 s against the geofence (the referee count stays 0). See
+  `docs/findings/backoff-redesign.md`.
 - The pin guard gets drive telemetry from `PhantomTrack`: the command actually sent last loop
   (after the caps and the geofence) and the measured velocity. Feeding it the assist's own wish
   made every stop at the fence look like a stall against an unseen robot.
 - Pin back-offs can point into the geofence; the robot then waits at the fence line until the
-  back-off times out (same open problem as back-offs into walls in the sim).
+  back-off times out. The core does not know the fence: every way of telling it tried so far made
+  contact worse or caused referee pins (`docs/findings/backoff-redesign.md`).
 - `getPoseTimestampSeconds()` defaults to "always fresh". Stale detection only works if the
   adapter reports a real timestamp (CTRE: yes; YAGSL: no, frozen-pose check only).
 

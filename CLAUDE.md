@@ -27,6 +27,16 @@ code. Keep changes small, tested and explained.
   `isFinite()` in tests.
 - Write the formula in the class Javadoc so the code can be checked against it.
 
+## Experiments and tests
+
+- **Never loosen an existing test threshold.** If a test fails after a change, stop and report
+  why (which test, what it expected, what it got, and what in the change caused it) instead of
+  changing the bar.
+- **No `-D` system properties for experiments.** Gradle's daemon keeps them between builds, so a
+  switch can silently stay on. Pass switches as program arguments (e.g.
+  `./gradlew pinMarginStudy --args="..."`, `./gradlew run --args="..."`), or run with
+  `--no-daemon`.
+
 ## Before every commit
 
 1. `./gradlew test` passes.
@@ -48,15 +58,19 @@ survives track id changes, a pin-guard margin from the robot's back-off time and
 (`RulesGuard.safetyMarginFor`: 0.5 s slack + latency + loop + time to slide one robot width; same
 rule in sim and robot, `robot/.../PinMarginStudy` measures it), and Phase 7 software (`robot/`: WPILib project, ghost opponents
 against the real pose, safety rules; it compiles phantom/core plus 8 AWT-free sim files listed in
-robot/shared-sources.txt, checked by RobotSharedSourcesTest).
+robot/shared-sources.txt, checked by RobotSharedSourcesTest). Nov 17: back-off for crowds
+(EscapePlanner sees every robot and where it will be, never along a pusher's path, 16 extra
+directions, yield when nothing is safe then slide out after 1 s; `PinMarginStudy` runs as
+`./gradlew pinMarginStudy --args=...`).
 
 Key findings: Line mirror + hold is the safe default and is best or tied everywhere with a real
 (anonymous) camera; Cut-off + hold no longer wins anywhere with a camera; a realistic camera costs
 about half the effect and anonymity mostly costs man-to-man (driver re-points ~7.4/min). Open
-problems: pins are not zero (0.08-0.09 per 3 min with anonymous tracking + contact sensing, from
+problems: pins are not zero (0.05-0.08 per 3 min with anonymous tracking + contact sensing, from
 camera error near contact); every contact threshold, camera number and the command latency are
-placeholders; the back-off maneuver itself fails with several robots around (slides into a second
-robot, gets chased to the geofence: up to 14 s of contact with 3 ghosts) and needs a redesign.
+placeholders; with 3 ghosts the back-off still lets contact reach ~5 s against Cyclers (and 11 s
+in one Evader run stuck at the geofence, which the core does not know about), while 1 ghost stays
+under 2.5 s everywhere and the referee count is 0 (docs/findings/backoff-redesign.md).
 Remaining items need the real robot (Phase 7 test session, contact calibration, latency and camera
 measurements, Phase 8 vision) or the 2027 game (FieldConfig, PinRules).
 
