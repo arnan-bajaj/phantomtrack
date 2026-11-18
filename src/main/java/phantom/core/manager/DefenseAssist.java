@@ -61,6 +61,7 @@ public final class DefenseAssist {
   private boolean holdEnabled = false;
   private boolean lastHolding = false;
   private int holdSwitches = 0;
+  private final HoldLatch holdLatch = new HoldLatch();
   private int modeIndex = 0;
   private int focusOpponentId = -1; // -1 = auto
   private final TargetSelector selector = TargetSelector.defaults();
@@ -104,7 +105,9 @@ public final class DefenseAssist {
     if (focus < 0 && useThreatSelector) {
       focus = selector.select(nowSec, opponents, field.defendedGoal());
     }
-    DefenseContext ctx = new DefenseContext(nowSec, self, selfVelocity, opponents, field, focus);
+    // Hold may only push on opponents closing on us or on the goal (HoldLatch: hysteresis).
+    DefenseContext ctx = new DefenseContext(nowSec, self, selfVelocity, opponents, field, focus,
+        holdLatch.update(nowSec, self.position(), opponents, field.defendedGoal()));
     lastTarget = activeMode().compute(ctx);
     boolean holding = false;
     if (holdEnabled) {
@@ -274,6 +277,11 @@ public final class DefenseAssist {
    */
   public int holdSwitches() {
     return holdSwitches;
+  }
+
+  /** How many times an opponent's hold permission flipped (see {@link HoldLatch}). */
+  public int holdLatchSwitches() {
+    return holdLatch.switches();
   }
 
   public void setHoldEnabled(boolean enabled) {
