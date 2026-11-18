@@ -13,6 +13,10 @@ import phantom.core.modes.DefenseContext;
 import phantom.core.modes.DefenseMode;
 import phantom.core.modes.DefenseTarget;
 import phantom.core.modes.HoldGroundMode;
+import phantom.core.rules.ContactDetector;
+import phantom.core.rules.ContactEstimate;
+import phantom.core.rules.PinRules;
+import phantom.core.rules.DriveTelemetry;
 import phantom.core.tracking.OpponentTracker;
 import phantom.core.tracking.TrackedRobot;
 
@@ -45,6 +49,7 @@ public final class DefenseAssist {
   private final FieldConfig field;
 
   private RulesGuard guard; // null = disabled
+  private ContactDetector.Config detectorConfig = ContactDetector.Config.placeholder();
   private boolean holdEnabled = false;
   private int modeIndex = 0;
   private int focusOpponentId = -1; // -1 = auto
@@ -54,6 +59,7 @@ public final class DefenseAssist {
   private List<TrackedRobot> lastOpponents = List.of();
   private ChassisCommand lastCommand = ChassisCommand.STOP;
   private State lastState = State.OFF;
+  private DriveTelemetry driveTelemetry = null; // set before each update; null = not provided
 
   public DefenseAssist(
       List<DefenseMode> modes,
@@ -69,7 +75,7 @@ public final class DefenseAssist {
     this.blend = blend;
     this.tracker = tracker;
     this.field = field;
-    this.guard = RulesGuard.defaults(field);
+    this.guard = newGuard();
   }
 
   /**
@@ -93,8 +99,11 @@ public final class DefenseAssist {
     // The guard runs every loop (even when not engaged) so its pin timers stay accurate.
     if (guard != null) {
       lastTarget =
-          guard.apply(nowSec, self, opponents, lastTarget, lastCommand.velocity(), selfVelocity);
+          driveTelemetry != null
+              ? guard.apply(nowSec, self, opponents, lastTarget, driveTelemetry)
+              : guard.apply(nowSec, self, opponents, lastTarget, lastCommand.velocity(), selfVelocity);
     }
+    driveTelemetry = null; // used once: a stale sample must never be mistaken for a fresh one
     lastCommand = decide(nowSec, self, driver, engaged);
     return lastCommand;
   }
@@ -225,14 +234,48 @@ public final class DefenseAssist {
   /** Pin-limit guard; true by default. Turning it off is for experiments only. */
   public void setRulesGuardEnabled(boolean enabled) {
     if (enabled && guard == null) {
-      guard = RulesGuard.defaults(field);
+      guard = newGuard();
     } else if (!enabled) {
       guard = null;
     }
   }
 
+  /**
+   * Contact detector thresholds (calibrated per robot and camera). Resets the pin guard's timers,
+   * so set it before the match starts.
+   */
+  public void setContactDetectorConfig(ContactDetector.Config config) {
+    this.detectorConfig = config;
+    if (guard != null) {
+      guard = newGuard();
+    }
+  }
+
+  private RulesGuard newGuard() {
+    return new RulesGuard(PinRules.placeholder(), field, 0.5, detectorConfig);
+  }
+
   public boolean rulesGuardEnabled() {
     return guard != null;
+  }
+
+  /**
+   * Drive telemetry for contact sensing (commanded and measured velocity, acceleration, drive
+   * current). Call before every {@link #update}; without it the guard falls back to velocities
+   * only.
+   */
+  public void setDriveTelemetry(DriveTelemetry telemetry) {
+    this.driveTelemetry = telemetry;
+  }
+
+  /** What the contact detector believed on the last update (nothing if the guard is off). */
+  public ContactEstimate lastContact() {
+    return guard == null ? ContactEstimate.none() : guard.lastContact();
+  }
+
+  /** True if the pin guard was counting contact time on the last update (false if disabled). */
+  public boolean guardSensesContact() {
+    return guard != null && guard.timingContact();
   }
 
   /** Number of times the guard forced a back-off (0 if disabled). */
