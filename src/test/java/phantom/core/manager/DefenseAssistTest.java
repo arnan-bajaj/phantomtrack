@@ -45,4 +45,21 @@ class DefenseAssistTest {
     assertEquals(0.0, c.omega(), TOL);
     assertTrue(assist.lastOpponents().isEmpty());
   }
+
+  @Test
+  void theSearchHeadingIsWrapped() {
+    // Audit L4. heading = angle(d) + 0.6 sin(0.8 t) with d = (-1, 0) on the placeholder field:
+    // at t = pi / 1.6, sin(0.8 t) = sin(pi / 2) = 1 -> pi + 0.6 = 3.7415927 rad, outside
+    // (-pi, pi] (CLAUDE.md rule 6). Wrapped: pi + 0.6 - 2 pi = -2.5415927.
+    var assist =
+        new DefenseAssist(
+            List.of(ShadowMode.defaults()),
+            HolonomicController.defaults(),
+            DriverBlend.defaults(),
+            now -> List.of(),
+            FieldConfig.placeholder());
+    assertEquals(0.6 - Math.PI, assist.searchTarget(Math.PI / 1.6).heading(), 1e-12);
+    // at t = 0: pi + 0 = pi, already in range
+    assertEquals(Math.PI, assist.searchTarget(0.0).heading(), 1e-12);
+  }
 }

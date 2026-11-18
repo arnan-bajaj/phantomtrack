@@ -8,6 +8,7 @@ import phantom.core.control.DriverBlend;
 import phantom.core.control.HolonomicController;
 import phantom.core.control.RulesGuard;
 import phantom.core.field.FieldConfig;
+import phantom.core.geometry.Angles;
 import phantom.core.geometry.Pose;
 import phantom.core.geometry.Vec2;
 import phantom.core.modes.DefenseContext;
@@ -156,7 +157,7 @@ public final class DefenseAssist {
    * <pre>
    *   d       = unit(fieldCenter - goal)
    *   home    = goal + HOME_DISTANCE * d
-   *   heading = angle(d) + SCAN_AMPLITUDE * sin(SCAN_RATE * t)   (sweep the cameras)
+   *   heading = wrap(angle(d) + SCAN_AMPLITUDE * sin(SCAN_RATE * t))   (sweep the cameras)
    * </pre>
    */
   public DefenseTarget searchTarget(double nowSec) {
@@ -166,7 +167,7 @@ public final class DefenseAssist {
       d = new Vec2(-1.0, 0.0);
     }
     Vec2 home = field.clampInside(goal.plus(d.times(HOME_DISTANCE)));
-    double heading = d.angle() + SCAN_AMPLITUDE * Math.sin(SCAN_RATE * nowSec);
+    double heading = Angles.wrap(d.angle() + SCAN_AMPLITUDE * Math.sin(SCAN_RATE * nowSec));
     return new DefenseTarget(home, heading, Vec2.ZERO, -1);
   }
 
